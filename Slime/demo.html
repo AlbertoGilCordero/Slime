@@ -1,0 +1,2634 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════════
+  SLIME — demo.html   (standalone; also the iframe on slide 10)
+  ════════════════════════════════════════════════════════════════════
+  No build step, no React. Three.js comes from a CDN.
+
+  EMBEDDING IT IN THE DECK
+    <section class="slide media" data-title="Live demo">
+      <iframe src="demo.html" allow="microphone; autoplay"></iframe>
+    </section>
+    The allow attribute matters — without it the microphone is dead inside
+    the iframe, silently.
+
+  CONNECTING THE BACKEND
+    Either click the DEMO badge and paste the n8n webhook URL,
+    or pass it in the address:  demo.html?hook=https://your-n8n/webhook/slime
+    The second way survives a reload and is what you want on the slide.
+
+  WITH NO BACKEND it still runs: local personas, drawn pictograms,
+  browser speech. That is your insurance if the wifi dies.
+  ════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Slime — live demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/human/dist/human.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--tint:#8AE6D2;--accent:#F2B233;--bg:#040607;--f:'Manrope',sans-serif}
+html,body{height:100%;background:var(--bg);color:#F2F5F4;font-family:var(--f);-webkit-font-smoothing:antialiased;transition:background 1.2s ease;overflow:hidden}
+body{display:flex;justify-content:center;padding:20px 18px}
+.wrap{width:100%;max-width:1680px;height:100%;display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px;align-items:stretch}
+.stage-col{min-width:0;min-height:0;display:flex;flex-direction:column;justify-content:center}
+.chat-col{min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px}
+@media(max-width:900px){
+  .wrap{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);gap:12px}
+  .stage-col{height:230px;flex:0 0 auto}
+}
+
+.bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex:0 0 auto}
+.who{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#7C8A89}
+.chips{display:flex;gap:7px}
+.chip{background:transparent;border:1px solid rgba(255,255,255,.16);border-radius:100px;padding:5px 13px;
+  font-size:11px;letter-spacing:.12em;cursor:pointer;font-family:var(--f);color:#7C8A89;transition:color .3s,border-color .3s}
+.chip.on{color:var(--tint);border-color:color-mix(in srgb,var(--tint) 45%,transparent)}
+.chip.warn{color:#F2B233;border-color:#F2B23355}
+.chip.warn{color:var(--accent);border-color:#F2B23355}
+
+.setup{border:1px solid rgba(255,255,255,.13);border-radius:14px;padding:14px;display:none;flex-direction:column;gap:9px;flex:0 0 auto}
+.setup.on{display:flex}
+.setup p{font-size:14px;line-height:1.5;color:#A9B6B4}
+.setup .row{display:flex;gap:8px}
+.filein{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;
+  padding:10px 16px;border-radius:12px;border:1px dashed color-mix(in srgb,var(--tint) 45%,transparent);
+  color:var(--tint);cursor:pointer;font-size:14px;text-align:center}
+.filein input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.setup .vopt{display:flex;gap:9px;align-items:flex-start;font-size:13px;line-height:1.45;color:#8E9C9A;cursor:pointer}
+.setup .vopt input{margin-top:3px;accent-color:var(--tint);flex:0 0 auto}
+.setup input{flex:1;font-family:var(--f);font-size:14px;color:#F2F5F4;background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:9px 12px}
+.setup input:focus{outline:none;border-color:var(--tint)}
+
+/* ── Framing the character from OUTSIDE the iframe ────────────────────
+   The character page lays itself out; we never touch its internals — doing
+   that is what produced the giant floating eyeballs. We only choose how big
+   its viewport is and where that viewport sits. Two knobs:
+     --char-h  the iframe's own height. The page centres itself inside this,
+               so a taller value moves the figure DOWN the column.
+     --char-y  a straight nudge, for pages that reserve room below the figure.
+   ─────────────────────────────────────────────────────────────────────── */
+/* ── the emergency overlay ─────────────────────────────────────
+   Everything else gets out of the way. Big, still, and only two things
+   on it: what this person's own profile says settles them, and one way
+   to say it is over. */
+.emergency{position:fixed;inset:0;z-index:200;background:rgba(2,4,5,.97);
+  display:none;align-items:center;justify-content:center;padding:40px}
+.emergency.on{display:flex}
+.em-inner{max-width:1200px;width:100%;display:flex;flex-direction:column;align-items:center;gap:28px;text-align:center}
+.em-line{font-size:26px;line-height:1.4;color:#8E9C9A;max-width:28ch}
+.em-picts{display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
+.em-picts figure{width:300px;margin:0;display:flex;flex-direction:column;align-items:center;gap:10px}
+.em-picts img{width:100%;border-radius:20px;background:rgba(255,255,255,.04)}
+.em-picts figcaption{font-size:22px;color:#F2F5F4}
+.em-solved{font-family:var(--f);font-size:22px;padding:16px 46px;border-radius:100px;
+  border:2px solid #5FC98A;background:rgba(95,201,138,.14);color:#5FC98A;cursor:pointer;transition:all .2s}
+.em-solved:hover{background:#5FC98A;color:#04120C}
+.em-note{font-size:16px;line-height:1.5;color:#F2B233;max-width:60ch}
+.em-credit{font-size:13px;color:#4A5857}
+
+#gl{flex:1 1 auto;min-height:0;position:relative;overflow:hidden}
+#charFrame{display:none;position:absolute;left:0;top:0;width:100%;height:100%;
+  border:0;background:transparent;transition:transform .25s ease}
+#gl.has-char #charFrame{display:block}
+#gl.has-char canvas{display:none!important}
+#gl.has-char .halo{display:none!important}
+#slimeDemo audio,#slimeDemo video,.wrap audio,.wrap video{display:none!important}
+#gl canvas{display:block}
+.halo{position:absolute;left:50%;top:50%;width:150px;height:150px;margin:-75px 0 0 -75px;border-radius:50%;
+  border:2px solid var(--tint);animation:ring 1.6s ease-out infinite;pointer-events:none;display:none}
+.halo.on{display:block}
+@keyframes ring{0%{transform:scale(1);opacity:.45}100%{transform:scale(1.4);opacity:0}}
+
+.q{font-size:20px;line-height:1.45;text-align:center;max-width:430px;margin:0 auto;flex:0 0 auto}
+.note{font-size:13px;line-height:1.5;color:var(--accent);flex:0 0 auto}
+
+.out{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:15px;padding:2px 4px 2px 2px}
+.out::-webkit-scrollbar{width:0}
+.you{align-self:flex-end;max-width:80%;font-size:16px;line-height:1.4;color:#8E9C9A;
+  border:1px solid rgba(255,255,255,.12);border-radius:16px 16px 4px 16px;padding:8px 12px}
+.turn{display:flex;flex-direction:column;gap:11px}
+.turn .say{font-size:19px;line-height:1.45}
+.steps{display:flex;flex-direction:column;gap:9px;list-style:none}
+.steps li{font-size:17px;line-height:1.45;padding-left:23px;position:relative}
+.steps li::before{content:"";position:absolute;left:2px;top:.62em;width:8px;height:8px;border-radius:50%;background:var(--tint)}
+.wave{display:flex;align-items:center;gap:5px;height:28px}
+.wave i{width:5px;border-radius:3px;background:var(--tint);animation:bar 1.1s ease-in-out infinite}
+@keyframes bar{0%,100%{height:8px;opacity:.5}50%{height:26px;opacity:1}}
+.rail{display:flex;align-items:center}
+.rail .stop{width:12px;height:12px;border-radius:50%;border:2px solid var(--tint)}
+.rail .seg{width:40px;height:2px;background:color-mix(in srgb,var(--tint) 50%,transparent)}
+.picts{display:flex;gap:10px;flex-wrap:wrap}
+.pict{flex:1 1 110px;max-width:150px;min-width:96px;padding:10px;border:1px solid color-mix(in srgb,var(--tint) 30%,transparent);
+  border-radius:15px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.pict .frame{width:100%;aspect-ratio:1;display:grid;place-items:center;border-radius:11px;
+  background:rgba(255,255,255,.03);overflow:hidden}
+.pict .frame img{width:100%;height:100%;object-fit:contain}
+.pict .frame span{font-size:12px;letter-spacing:.1em;color:color-mix(in srgb,var(--tint) 60%,transparent)}
+.pict .lbl{font-size:14px;color:#8E9C9A;text-align:center}
+.check{font-size:16px;line-height:1.4;color:#A9B6B4}
+.quick{display:flex;gap:7px;flex-wrap:wrap}
+.quick button{font-family:var(--f);font-size:13px;padding:6px 13px;border-radius:100px;
+  border:1px solid color-mix(in srgb,var(--tint) 40%,transparent);background:transparent;color:var(--tint);cursor:pointer}
+.sheet{border:1px solid color-mix(in srgb,var(--tint) 35%,transparent);border-radius:16px;padding:20px 22px;background:rgba(255,255,255,.03)}
+.sheet .sh{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:11px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.12)}
+.sheet .sh strong{font-size:23px;font-weight:800;letter-spacing:-.02em}
+.sheet .sh span{font-size:13px;color:#8E9C9A}
+.sheet .r{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:15px}
+.sheet .r span:first-child{color:#8E9C9A}
+.sheet .r span:last-child{color:var(--tint)}
+.sheet .l{margin-top:14px}
+.sheet .l h4{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#8E9C9A;font-weight:600;margin-bottom:5px}
+.sheet .l div{font-size:15px;line-height:1.5;padding-left:12px;position:relative}
+.sheet .l div::before{content:"\00b7";position:absolute;left:0;color:var(--tint)}
+.sheet .l .e{color:#4A5857}
+.sheet .pr{margin-top:18px;font-family:var(--f);font-size:14px;padding:8px 16px;border-radius:100px;border:1px solid color-mix(in srgb,var(--tint) 45%,transparent);background:transparent;color:var(--tint);cursor:pointer}
+@media print{body *{visibility:hidden}.sheet,.sheet *{visibility:visible;color:#000 !important;border-color:#999 !important}.sheet{position:absolute;left:0;top:0;width:100%;background:#fff;border:0}.sheet .pr{display:none}}
+.err{font-size:15px;color:var(--accent);border-left:2px solid var(--accent);padding-left:12px}
+.sheet{border:1px solid color-mix(in srgb,var(--tint) 40%,transparent);border-radius:14px;
+  background:rgba(255,255,255,.03);overflow:hidden}
+.sh-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:14px 18px;
+  border-bottom:1px solid rgba(255,255,255,.1)}
+.sh-h strong{font-size:18px}
+.sh-h span{font-size:13px;color:#7C8A89}
+.sh-meta{padding:4px 18px}
+.sh-b{padding:8px 18px}
+.sh-sum{font-size:15px;line-height:1.6;color:#C3CFCD}
+.sh-secs{padding:2px 18px 10px}
+.sh-s h4{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--tint);font-weight:700;margin:10px 0 4px}
+.sh-s ul{list-style:none;padding:0;margin:0}
+.sh-s li{font-size:14px;line-height:1.5;color:#C3CFCD;padding-left:11px;position:relative}
+.sh-s li::before{content:"\00b7";position:absolute;left:0;color:var(--tint)}
+.sh-r{display:flex;justify-content:space-between;gap:14px;padding:8px 0;
+  border-bottom:1px solid rgba(255,255,255,.06);font-size:15px}
+.sh-r span{color:#7C8A89}
+.sh-r b{color:var(--tint);font-weight:600;text-align:right}
+.sh-f{padding:12px 18px;font-size:13px;line-height:1.5;color:#7C8A89;border-top:1px solid rgba(255,255,255,.1)}
+.thinking{font-size:14px;color:#5A6968;letter-spacing:.08em}
+.credit{font-size:12px;line-height:1.5;color:#5A6968;padding-top:2px}
+
+.ask{flex:0 0 auto;display:flex;flex-direction:column;gap:9px;align-items:center}
+.mic{width:70px;height:70px;border-radius:50%;border:none;cursor:pointer;background:transparent;
+  box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--tint) 60%,transparent);color:var(--tint);
+  display:grid;place-items:center;transition:all .3s}
+.mic.on{background:var(--tint);color:var(--bg);box-shadow:0 0 0 3px var(--tint);animation:micPulse 1.4s ease-in-out infinite}
+@keyframes micPulse{0%,100%{box-shadow:0 0 0 3px var(--tint)}50%{box-shadow:0 0 0 9px color-mix(in srgb,var(--tint) 30%,transparent)}}
+.mic:disabled{opacity:.4;cursor:default}
+.mic:focus-visible{outline:2px solid #F2F5F4;outline-offset:3px}
+.state{font-size:12px;letter-spacing:.08em;color:#5A6968;min-height:16px}
+.meter{display:none;align-items:flex-end;gap:3px;height:22px}
+.meter.on{display:flex}
+.meter i{width:4px;height:3px;border-radius:2px;background:var(--tint);opacity:.35;transition:height .07s linear,opacity .07s linear}
+.type{display:flex;gap:8px;width:100%;align-items:flex-end}
+.type textarea{flex:1;font-family:var(--f);font-size:16px;line-height:1.4;color:#F2F5F4;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.13);border-radius:14px;
+  padding:10px 13px;resize:none;max-height:90px;transition:border-color .3s}
+.type textarea:focus{outline:none;border-color:var(--tint)}
+.type textarea::placeholder{color:#5A6968}
+.type button{width:44px;height:44px;border-radius:50%;border:0;background:var(--tint);color:var(--bg);
+  font-size:18px;cursor:pointer;transition:opacity .3s}
+.type button:disabled{opacity:.3;cursor:default}
+
+.panel{position:fixed;top:0;right:0;width:320px;height:100%;background:#080C0D;
+  border-left:1px solid rgba(255,255,255,.1);padding:20px 18px;overflow-y:auto;z-index:10;
+  transform:translateX(100%);transition:transform .35s ease}
+.panel.on{transform:none}
+.panel h2{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:#7C8A89;font-weight:700;margin-bottom:6px}
+.panel .src{font-size:12px;margin-bottom:12px;color:var(--accent)}
+.panel .src.live{color:var(--tint)}
+.panel .row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;
+  border-bottom:1px solid rgba(255,255,255,.07);font-size:13px}
+.panel .row span:first-child{color:#7C8A89}
+.panel .row span:last-child{color:var(--tint);text-align:right}
+.panel .row span.none{color:#4A5857}
+.panel .list{margin-top:14px}
+.panel .list h3{border-top:1px solid rgba(255,255,255,.08);padding-top:12px;margin-top:4px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#7C8A89;margin-bottom:6px;font-weight:600}
+.panel .list div{font-size:13px;line-height:1.5;color:#C3CFCD;padding-left:11px;position:relative}
+.panel .list div::before{content:"·";position:absolute;left:0;color:var(--tint)}
+.panel .list .empty{color:#4A5857}
+.panel .reset{margin-top:20px;font-family:var(--f);font-size:13px;padding:7px 15px;border-radius:100px;
+  border:1px solid rgba(255,255,255,.18);background:transparent;color:#8E9C9A;cursor:pointer}
+
+/* ── the alert button ─────────────────────────────────────────────
+   Deliberately the only red thing on screen, and deliberately not near
+   anything else you might tap by accident. Hold it to move it. */
+.alert-btn{position:fixed;left:auto;right:26px;bottom:26px;z-index:60;
+  width:82px;height:82px;border-radius:50%;border:2px solid #FF5A4E;
+  background:rgba(255,90,78,.14);color:#FF7A70;cursor:pointer;
+  font-family:var(--f);font-size:14px;font-weight:700;letter-spacing:.14em;
+  display:grid;place-items:center;transition:transform .18s ease,background .25s ease,box-shadow .25s}
+.alert-btn:hover{background:rgba(255,90,78,.24);box-shadow:0 0 26px rgba(255,90,78,.35)}
+.alert-btn:active{transform:scale(.94)}
+.alert-btn.dragging{cursor:grabbing;box-shadow:0 0 0 4px rgba(255,90,78,.35);transform:scale(1.06)}
+.alert-btn.sending{background:rgba(255,90,78,.4);color:#fff}
+.alert-btn.sent{border-color:#5FC98A;color:#5FC98A;background:rgba(95,201,138,.16)}
+.alert-btn.failed{border-color:#F2B233;color:#F2B233;background:rgba(242,178,51,.16);font-size:12px}
+.alert-btn .lbl{pointer-events:none}
+
+/* ── profile panel chrome ── */
+.panel{padding-top:52px}
+.panel-x{position:absolute;top:14px;right:16px;width:34px;height:34px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.18);background:transparent;color:#8E9C9A;
+  font-size:22px;line-height:1;cursor:pointer;transition:all .2s}
+.panel-x:hover{border-color:var(--tint);color:var(--tint)}
+.panel-foot{display:flex;flex-direction:column;gap:9px;margin-top:22px}
+.panel-foot button{font-family:var(--f);font-size:14px;padding:9px 16px;border-radius:100px;
+  border:1px solid rgba(255,255,255,.18);background:transparent;color:#8E9C9A;cursor:pointer;transition:all .2s}
+.panel-foot .print{border-color:color-mix(in srgb,var(--tint) 45%,transparent);color:var(--tint)}
+.panel-foot button:hover{border-color:var(--tint);color:var(--tint)}
+.panel .reset{margin-top:0}
+
+@media(prefers-reduced-motion:reduce){.halo{animation:none}.wave i{animation:none;height:16px}}
+</style>
+</head>
+<body>
+
+<video id="camv" playsinline muted style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"></video>
+<div class="wrap">
+
+  <!-- left half: the character, as big as the screen allows -->
+  <div class="emergency" id="emergency">
+  <div class="em-inner">
+    <p class="em-line" id="emLine"></p>
+    <div class="em-picts" id="emPicts"></div>
+    <button class="em-solved" id="emSolved">Solved?</button>
+    <p class="em-note" id="emNote"></p>
+    <p class="em-credit" id="emCredit"></p>
+  </div>
+</div>
+
+<div class="stage-col">
+    <div id="gl">
+      <iframe id="charFrame" title="character" scrolling="no" allow="autoplay; microphone"></iframe>
+      <div class="halo" id="halo"></div>
+    </div>
+  </div>
+
+  <!-- right half: everything else -->
+  <div class="chat-col">
+  <div class="bar">
+    <span class="who" id="who">Slime</span>
+    <div class="chips">
+      <button class="chip warn" id="mode">DEMO</button>
+      <button class="chip" id="toggleMic">MIC</button>
+      <button class="chip" id="toggleCam">CAMERA</button>
+      <button class="chip" id="togglePanel">PROFILE</button>
+    </div>
+  </div>
+
+  <div class="setup" id="setup">
+    <p>Paste the n8n production webhook URL. With it, the brain is DeepSeek, the pictograms come from
+       Nano Banana when ARASAAC has no symbol. Without it, Slime runs a local demo.</p>
+    <div class="row">
+      <input id="hookInput" placeholder="https://your-n8n/webhook/slime"/>
+      <button class="chip on" id="saveHook">SAVE</button>
+    </div>
+    <label class="filein">
+      <input type="file" id="dataFile" accept=".json"/>
+      <span>Load slime-data.json — the faces and profiles exported from vision.html</span>
+    </label>
+
+  </div>
+
+  <p class="q" id="question"></p>
+  <p class="note" id="note" style="display:none"></p>
+
+  <div class="out" id="out"></div>
+
+  <div class="ask">
+    <button class="mic" id="mic" aria-label="Speak">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>
+      </svg>
+    </button>
+    <div class="meter" id="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <span class="state" id="state">tap to speak</span>
+    <div class="type">
+      <textarea id="draft" rows="1" placeholder="or type here"></textarea>
+      <button id="send" aria-label="Send">→</button>
+    </div>
+  </div>
+  </div>
+</div>
+
+<button class="alert-btn" id="alertBtn" aria-label="Send an alert">
+  <span class="lbl">ALERT</span>
+</button>
+
+<aside class="panel" id="panel">
+  <button class="panel-x" id="panelX" aria-label="Close">×</button>
+  <h2>What Slime knows</h2>
+  <p class="src" id="src">local demo — no backend connected</p>
+  <div id="rows"></div>
+  <div id="lists"></div>
+  <div class="panel-foot">
+    <button class="print" id="printProfile">Print profile as PDF</button>
+    <button class="reset" id="reset">Start over</button>
+  </div>
+</aside>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   1 · STATE
+   ══════════════════════════════════════════════════════════════ */
+const $ = (s) => document.querySelector(s);
+const LS = "slime.demo";
+
+const EMPTY_PROFILE = { film:null, character:null, channel:null, detail:null, stimulus:null, pace:null,
+  interests:[], difficulty:{level:null,signals:[]}, whatWorks:[], whatDoesnt:[], notes:[] };
+
+const DEFAULT_THEME = { film:null, character:"Slime", persona:"Warm, calm, plain-spoken.",
+  palette:{tint:"#8AE6D2",accent:"#F2B233",bg:"#040607"},
+  face:{eyes:"round",accessory:"none",accessoryColor:"#F2B233"},
+  vocabulary:[], greeting:"Hello. I am here." };
+
+const FILM_Q  = "Before we start. What is your favourite film?";
+
+/* The look follows the film the person names — nothing is assigned in advance.
+   Add a page here and it becomes available to everyone. Anything unmatched
+   keeps the 3D gel, which is Slime's own face. */
+const CHARACTER_PAGES = [
+  { file:"char-goku.html",    name:"goku",
+    match:/goku|kakarot|vegeta|saiyan|saiyajin|dragon ?ball|bola de drac|toriyama|kamehameha|shenron|bulma|piccolo|freezer|frieza|anime|manga|akira/i },
+  { file:"char-tintin.html",  name:"tintin",
+    match:/tint[ií]n|milou|snowy|hadd?ock|herg[eé]|tornasol|calculus|dupond|thomson|reporter|reportero|licorne|unicorn|moon|lune/i },
+  { file:"char-asterix.html", name:"asterix",
+    match:/ast[eé]rix|ob[eé]lix|idefix|id[eé]fix|panoramix|abraracourcix|gaul|galo|galli|druid|druida|menhir|poti[oó]n|potion|roman|c[eé]sar|caesar|uderzo|goscinny/i },
+  { file:"char-doctor.html",  name:"doctor",
+    match:/doctor|doctora|docteur|m[eé]dic|medico|hospital|clinic|cl[ií]nic|nurse|enfermer|house|grey'?s|scrubs|patch adams|salud|health|patient/i },
+  { file:"char-macron.html",  name:"macron",
+    match:/macron|[eé]lys[eé]e|president|présidente?|presidente|politic|pol[ií]tic|france|francia|français|elecci[oó]n|election|minister|ministr/i },
+  { file:"char-coffee.html",  name:"coffee",
+    match:/coffee|caf[eé]|kaffe|barista|espresso|cappuccino|latte|brew|cafeter|central perk|friends|starbucks|breakfast|desayuno|morning/i },
+];
+
+/* The look follows what the person actually said. Their raw answer is checked
+   first, because the model sometimes tidies "café" into something else. */
+function pickCharacter(theme, raw){
+  const said = String(raw || "");
+  const direct = CHARACTER_PAGES.find((c) => c.match.test(said));
+  if(direct) return direct;
+  const hay = [theme.character, theme.film, theme.persona, (theme.vocabulary || []).join(" ")]
+    .filter(Boolean).join(" ");
+  return CHARACTER_PAGES.find((c) => c.match.test(hay)) || null;
+}
+const FORMAT_Q = "How do you like things explained? You can say pictures, voice, text, or a story.";
+
+let hook = new URLSearchParams(location.search).get("hook") || localStorage.getItem(LS + ".hook") || "";
+let phase = "film";
+let theme = JSON.parse(JSON.stringify(DEFAULT_THEME));
+let profile = JSON.parse(JSON.stringify(EMPTY_PROFILE));
+let busy = false, lastSlime = FILM_Q, audioEl = null;
+let present = null;          // who the camera currently sees
+
+/* Two different jobs. Talking TO the person Slime accompanies, or talking to
+   someone in their circle ABOUT them. The second one has a privacy line in it. */
+function whoBlock(p){
+  const sup = (window.SlimeVision && SlimeVision.supported) ? SlimeVision.supported() : [];
+  const primary = currentPerson ? { name: currentPerson } : (sup[0] || null);
+  if(p.role === "primary"){
+    return "\n\nWHO IS IN THE ROOM: " + p.name + ". This is the person you accompany."
+      + "\nGreet them by name, warmly and briefly. Speak TO them, in the second person."
+      + " Use everything in the profile freely — it is theirs.";
+  }
+  const who = primary ? primary.name : "the person you accompany";
+  return "\n\nWHO IS IN THE ROOM: " + p.name
+    + (p.relation ? ", " + p.relation + " of " + who : ", part of " + who + "'s circle") + "."
+    + "\nThis is NOT the person you accompany. Greet " + p.name + " by name and speak to them"
+    + " about " + who + " in the third person."
+    + "\nPRIVACY: you may say how the day is going in general terms, and what would help right now."
+    + " Do NOT recite " + who + "'s profile, their difficulties, what they struggle with, or anything"
+    + " they told you in confidence. If asked for those details, say kindly that it is "
+    + who + "'s to share. Never invent an update you do not have.";
+}
+let camOn = false;
+
+const live = () => !!hook;
+
+/* ══════════════════════════════════════════════════════════════
+   2 · PROMPTS  (executed by DeepSeek, inside n8n)
+   ══════════════════════════════════════════════════════════════ */
+const THEME_PROMPT = `Someone just named their favourite film. Build a companion persona from it.
+
+The companion is Slime: a soft, gel-like creature that helps an autistic adult with everyday tasks
+and learning. It is about to take on the look and voice of a MAIN character from that film.
+
+Return ONLY this JSON object:
+{"film":"proper title","character":"main character's name",
+ "persona":"two short lines on how this character speaks. Never sarcasm or idioms.",
+ "palette":{"tint":"#RRGGBB main colour from the film, bright enough on near-black","accent":"#RRGGBB","bg":"#RRGGBB near-black tinted toward the film"},
+ "face":{"eyes":"round|large|narrow|wide","accessory":"hat|cap|crown|goggles|mask|ears|antenna|helmet|bow|scarf|none","accessoryColor":"#RRGGBB",
+   "features":["pick any that fit the character, or leave empty: wings, moustache, bignose, braids, hair, beard, brows"],
+   "featureColor":"#RRGGBB colour for hair, braids, moustache and beard"},
+ "portraitPrompt":"one sentence of GENERIC visual notes only - dominant colours, mood, and broad trait categories such as a moustache, goggles, long ears, a winged head-piece. No names, no costume specifics, no insignia. These are hints for an original design, not a likeness.",
+ "vocabulary":["4-6 lowercase nouns from that world that can carry a metaphor"],
+ "greeting":"one short line in character, saying hello and that it is ready to help"}
+
+If it is not a film you know, use a gentle generic persona and put what they said in "film". Never refuse.`;
+
+const replyPrompt = (t) => `You are ${t.character}, from ${t.film || "a story this person loves"}, helping an autistic adult with everyday tasks and learning.
+
+HOW YOU SPEAK
+${t.persona}
+Metaphors available from your world: ${(t.vocabulary||[]).join(", ") || "keep it plain"}.
+
+RULES
+- Short sentences. One idea per sentence.
+- No idioms, no sarcasm, no figures of speech, except deliberate metaphors from your world in story mode.
+- Never more than 3 steps at a time.
+- Be concrete: "Press the round button on the right", not "activate the device".
+- Never talk down. This is an adult.
+- Clarity beats character. If staying in character makes a step harder to follow, drop the flavour.
+
+READ THE PROFILE
+- channel decides mode; if unknown use "text".
+- difficulty.level "struggles" → fewer words, smaller steps, lean on whatWorks.
+- difficulty.level "quick" → full three steps, less repetition.
+- Never reuse anything listed in whatDoesnt.
+
+THE STEPS MUST BE THE REAL TASK, IN ORDER, FROM START TO FINISH.
+Someone who follows only your steps must actually end up having done the thing.
+Never emit filler like "I will use pictures" or "you can tell me if that helps" as a step —
+steps are actions, not commentary about the format.
+
+For mode "pictures": give SIX steps, seven at most, five at the fewest. Each one is a
+short ACTION, two or three words, verb first: "fill kettle", "boil water", "open jar",
+"add coffee", "pour water", "add milk", "stir cup", "drink coffee".
+They are looked up in a fixed pictogram dictionary, so:
+ - lead with a plain everyday verb, and keep the object simple and concrete
+ - avoid words with two meanings — "switch" and "knob" find a machine part, "button"
+   finds a shirt button
+ - no brands, no proper nouns, no abstractions like "carefully" or "ready"
+Pictures stay on screen, so more of them is not more load. Spoken steps are different:
+respect the profile's limit there.
+
+End explanations with a short check question. Small talk: check = null.
+
+Return ONLY this JSON:
+{"mode":"text|voice|pictures|story","say":"one short line in character","steps":["...","...","..."],"check":"short question or null","mood":"calm|attentive|happy"}`;
+
+const LEARN_PROMPT = `You quietly maintain a profile of an autistic adult talking to a companion.
+You get the CURRENT PROFILE, the companion's LAST MESSAGE and the person's LATEST REPLY.
+Return the profile updated with anything new. Keep what is there unless contradicted.
+
+Fields: film, character (keep as is), channel (text|voice|pictures|story|null), detail (short|normal|null),
+stimulus (low|normal|null), pace (slow|normal|null), interests[], difficulty{level:quick|steady|struggles|null, signals[max 4]},
+whatWorks[max 4], whatDoesnt[max 4], notes[max 5].
+
+READING DIFFICULTY — the important part. The companion's last message usually ends with a check
+question, and the reply to it is your best signal.
+  "yes"/"got it"/moves on            → it worked. Add the approach to whatWorks.
+  "not really"/"show me differently" → it did not. Add the approach to whatDoesnt.
+  repeated struggle → difficulty.level "struggles";  first-time success → "quick";  mixed → "steady"
+Never set difficulty.level from one turn unless the signal is unmistakable.
+Name the approach, never the person: "three steps at once was too many", not "they are slow".
+
+Return ONLY the JSON profile object.`;
+
+/* ══════════════════════════════════════════════════════════════
+   3 · BACKEND  (n8n)  +  local fallback
+   ══════════════════════════════════════════════════════════════ */
+async function callN8N(payload){
+  const r = await fetch(hook, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
+  if(!r.ok) throw new Error("n8n " + r.status);
+  return r.json();
+}
+
+const PRESETS = [
+  { match:/toy story|buzz|woody/i, film:"Toy Story", character:"Buzz Lightyear",
+    persona:"Bright and certain. Short confident lines. Likes missions and plans.",
+    palette:{tint:"#6FB7F0",accent:"#F2B233",bg:"#050810"},
+    face:{eyes:"wide",accessory:"helmet",accessoryColor:"#F2F5F4"},
+    vocabulary:["mission","launch","wings","star","command"], greeting:"Ready when you are. Give me the mission." },
+  { match:/lion king|simba|rey le/i, film:"The Lion King", character:"Simba",
+    persona:"Warm and unhurried. Steady, grounded words.",
+    palette:{tint:"#F0A94C",accent:"#F2E0A0",bg:"#0C0703"},
+    face:{eyes:"large",accessory:"ears",accessoryColor:"#8A5A2B",features:["hair","brows"],featureColor:"#7A3F16"},
+    vocabulary:["savannah","sunrise","path","pride","river"], greeting:"I am here. Take your time." },
+  { match:/nemo|dory|finding|buscando/i, film:"Finding Nemo", character:"Dory",
+    persona:"Cheerful and gentle. Repeats the important part so it sticks.",
+    palette:{tint:"#5FB0E0",accent:"#F2C94C",bg:"#020810"},
+    face:{eyes:"large",accessory:"none",accessoryColor:"#F2C94C"},
+    vocabulary:["current","reef","swim","shell","tide"], greeting:"Hi. We will just keep going, one bit at a time." },
+  { match:/wall|robot/i, film:"WALL·E", character:"WALL·E",
+    persona:"Quiet and curious. Very few words. Never rushes.",
+    palette:{tint:"#D9A441",accent:"#8AE6D2",bg:"#0B0803"},
+    face:{eyes:"large",accessory:"goggles",accessoryColor:"#B0BEC5",features:["brows"],featureColor:"#8A7333"},
+    vocabulary:["cube","spark","plant","track","signal"], greeting:"Hello. I am listening." },
+  { match:/asterix|astérix|obelix/i, film:"Astérix", character:"Astérix",
+    persona:"Quick and cheerful. Plain, sturdy words. Likes a plan before a fight.",
+    palette:{tint:"#F0C24C",accent:"#5FC98A",bg:"#0A0803"},
+    face:{eyes:"round",accessory:"helmet",accessoryColor:"#C9A227",
+          features:["wings","moustache","bignose","braids"],featureColor:"#F0D26B"},
+    vocabulary:["village","potion","boar","shield","road"], greeting:"Right. Tell me what we are doing today." },
+];
+
+const localTheme = (a) => {
+  const p = PRESETS.find((x) => x.match.test(a));
+  return p ? Object.assign({}, DEFAULT_THEME, p)
+           : Object.assign({}, DEFAULT_THEME, { film:a, greeting:"Hello. I am here and I am listening." });
+};
+
+function localReply(msg){
+  const m = (msg||"").toLowerCase(), mode = profile.channel || "text";
+  if(/hello|hi\b|hey|hola/.test(m)) return {mode:"text",say:"Hello. What do you need to do today?",steps:[],check:null,mood:"happy"};
+  if(/not really|differently/.test(m)) return {mode:mode==="pictures"?"story":"pictures",say:"Let me try it another way.",steps:["kettle","red button","eight minutes"],check:"Better?",mood:"attentive"};
+  if(/yes|got it/.test(m)) return {mode:"text",say:"Good. Ask me the next one when you are ready.",steps:[],check:null,mood:"happy"};
+  return {mode,say:"Here it is, in three steps.",steps:["kettle","red button","eight minutes"],check:"Did that work?",mood:"calm"};
+}
+
+/* ══════════════════════════════════════════════════════════════
+   4 · SPEECH
+   ══════════════════════════════════════════════════════════════ */
+let recog = null, listening = false, micOK = true;
+let wantListening = false, heard = "", gotAnything = false;
+
+(function(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ micOK = false; return; }
+  recog = new SR();
+  recog.continuous = true;        // keep going between sentences
+  recog.interimResults = true;    // so the person can see it is working
+  recog.lang = "en-US";
+
+  /* Full event trace. Whichever of these stops arriving is where it breaks. */
+  ["start","audiostart","soundstart","speechstart","speechend","soundend","audioend"]
+    .forEach((ev) => recog.addEventListener(ev, () => console.log("[slime] recog:", ev)));
+
+  recog.onresult = (e) => {
+    gotAnything = true;
+    let interim = "";
+    for(let i = e.resultIndex; i < e.results.length; i++){
+      const r = e.results[i];
+      if(r.isFinal) heard += r[0].transcript + " ";
+      else interim += r[0].transcript;
+    }
+    /* show it live in the text box: proof it is listening, and editable
+       afterwards if a word came out wrong */
+    const draft = $("#draft");
+    draft.value = (heard + interim).replace(/\s+/g, " ").trim();
+    draft.style.height = "auto";
+    draft.style.height = draft.scrollHeight + "px";
+  };
+
+  recog.onerror = (e) => {
+    console.warn("[slime] speech error:", e.error);
+    if(e.error === "not-allowed" || e.error === "service-not-allowed"){
+      micOK = false; wantListening = false; micReady = false;
+      $("#toggleMic").classList.remove("on");
+      $("#toggleMic").classList.add("warn");
+      $("#toggleMic").textContent = "MIC OFF";
+      $("#state").textContent = "microphone blocked — type instead";
+      $("#mic").disabled = true;
+      note("The browser blocked the microphone. Allow it in the padlock icon, then reload.");
+    } else if(e.error === "audio-capture"){
+      wantListening = false; note("No microphone found on this machine.");
+    } else if(e.error === "network"){
+      wantListening = false; note("Speech recognition needs a connection and could not reach it.");
+    } else if(e.error === "no-speech"){
+      /* normal during a pause — the restart below keeps the session alive */
+    } else if(e.error !== "aborted"){
+      note("Microphone problem: " + e.error);
+    }
+  };
+
+  recog.onend = () => {
+    /* Chrome closes the session after a few seconds of silence. If the person
+       has not tapped stop yet, reopen it — from their side nothing happened. */
+    if(wantListening){
+      try{ recog.start(); return; }catch(e){}
+    }
+    setListening(false);
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   MICROPHONE PERMISSION
+   SpeechRecognition asks for the microphone in its own way, and when it
+   is refused or never prompted it simply returns nothing — which reads as
+   "I did not catch anything" and tells you nothing useful. Asking through
+   getUserMedia first gives a real answer: granted, denied, or no device.
+   ══════════════════════════════════════════════════════════════ */
+let micReady = false;
+
+async function requestMic(){
+  const chip = $("#toggleMic");
+  chip.classList.remove("warn");
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    note("This browser cannot access the microphone. It needs https or localhost.");
+    chip.classList.add("warn"); chip.textContent = "NO MIC";
+    return false;
+  }
+  chip.textContent = "…";
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    const track = stream.getAudioTracks()[0];
+
+    /* A granted permission and a working microphone are different things. A
+       device muted in hardware still opens fine and delivers pure silence,
+       which the recogniser reports as "no speech" — useless as a clue. Say it
+       here instead, while the person is still looking at the button. */
+    const isMuted = track && track.muted;
+    const label = track ? (track.label || "unnamed device") : "no device";
+    stream.getTracks().forEach((t) => t.stop());
+
+    micReady = true; micOK = true;
+    if(isMuted){
+      chip.classList.remove("on"); chip.classList.add("warn");
+      chip.textContent = "MIC MUTED";
+      $("#mic").disabled = false;
+      note("Your microphone (" + label + ") is muted on the machine itself, not in the browser. "
+         + "Look for a function key with a crossed-out microphone, or unmute it in "
+         + "Windows sound settings, then tap MIC again.");
+      console.warn("[slime] device muted at OS level:", label);
+      return false;
+    }
+    $("#mic").disabled = false;
+    chip.classList.remove("warn"); chip.classList.add("on"); chip.textContent = "MIC ON";
+    $("#state").textContent = "tap to speak";
+    note("");
+    console.log("[slime] microphone granted");
+    return true;
+  }catch(e){
+    micReady = false;
+    chip.classList.remove("on"); chip.classList.add("warn"); chip.textContent = "MIC OFF";
+    console.warn("[slime] microphone denied:", e.name, e.message);
+    if(e.name === "NotAllowedError")
+      note("The microphone was refused. Click the padlock in the address bar, allow the microphone, then tap MIC again.");
+    else if(e.name === "NotFoundError")
+      note("No microphone was found on this machine.");
+    else
+      note("Microphone error: " + e.name + ". Note that it only works over https or localhost.");
+    return false;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INPUT LEVEL
+   If these bars move, sound is reaching the browser and any failure is
+   in the recogniser, not the microphone. If they stay flat, the device
+   or the permission is wrong. It removes the guesswork.
+   ══════════════════════════════════════════════════════════════ */
+let meterStream = null, meterCtx = null, meterRaf = null;
+
+async function startMeter(){
+  stopMeter();
+  try{
+    meterStream = await navigator.mediaDevices.getUserMedia({
+      audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:true }
+    });
+
+    /* what Windows actually handed us */
+    const track = meterStream.getAudioTracks()[0];
+    if(track){
+      console.log("[slime] input device:", track.label || "(unnamed)",
+                  "| enabled:", track.enabled, "| muted:", track.muted,
+                  "| state:", track.readyState);
+      if(track.muted){
+        note("The microphone is muted on the machine (" + (track.label || "input device")
+           + "). Look for a function key with a crossed-out microphone.");
+        $("#toggleMic").classList.remove("on");
+        $("#toggleMic").classList.add("warn");
+        $("#toggleMic").textContent = "MIC MUTED";
+      }
+      track.onmute   = () => note("The microphone just went muted on the machine.");
+      track.onunmute = () => note("");
+    }
+    try{
+      const devs = await navigator.mediaDevices.enumerateDevices();
+      console.log("[slime] audio inputs:",
+        devs.filter((d) => d.kind === "audioinput").map((d) => d.label || d.deviceId));
+    }catch(e){}
+
+    meterCtx = new (window.AudioContext || window.webkitAudioContext)();
+    /* Chrome creates it suspended. Without this the analyser returns silence
+       whatever the microphone is doing, and the bars lie. */
+    if(meterCtx.state === "suspended"){
+      try{ await meterCtx.resume(); }catch(e){}
+    }
+    console.log("[slime] audio context:", meterCtx.state);
+    if(meterCtx.state !== "running")
+      note("The browser suspended audio processing. Click anywhere on the page, then tap the microphone again.");
+
+    const src = meterCtx.createMediaStreamSource(meterStream);
+    const an = meterCtx.createAnalyser();
+    an.fftSize = 256;
+    src.connect(an);
+    const data = new Uint8Array(an.frequencyBinCount);
+    const bars = Array.prototype.slice.call($("#meter").children);
+    $("#meter").classList.add("on");
+    delete $("#meter").dataset.logged;
+    $("#meter").dataset.peak = "0";
+    let peak = 0;
+    (function draw(){
+      meterRaf = requestAnimationFrame(draw);
+      an.getByteFrequencyData(data);
+      let sum = 0;
+      for(let i = 0; i < data.length; i++) sum += data[i];
+      /* time-domain would be steadier, but frequency energy is enough to tell
+         silence from speech, which is the only question here */
+      const level = Math.min(1, (sum / data.length) / 70);
+      if(level > 0.04 && !$("#meter").dataset.logged){
+        $("#meter").dataset.logged = "1";
+        console.log("[slime] sound detected, level", level.toFixed(2));
+      }
+      if(level > peak) peak = level;
+      bars.forEach((b, i) => {
+        const k = Math.max(0, level - Math.abs(i - 3) * 0.09);
+        b.style.height = (3 + k * 19) + "px";
+        b.style.opacity = 0.35 + k * 0.65;
+      });
+      $("#meter").dataset.peak = peak.toFixed(2);
+    })();
+  }catch(e){ console.warn("[slime] level meter unavailable:", e.name); }
+}
+
+function stopMeter(){
+  if(meterRaf) cancelAnimationFrame(meterRaf);
+  meterRaf = null;
+  if(meterStream){ meterStream.getTracks().forEach((t) => t.stop()); meterStream = null; }
+  if(meterCtx){ try{ meterCtx.close(); }catch(e){} meterCtx = null; }
+  const m = $("#meter");
+  if(m){ m.classList.remove("on"); }
+}
+
+function startListening(){
+  if(!recog){ note("This browser has no speech recognition. Type instead."); return; }
+  if(busy){ note("Still thinking — one moment."); return; }
+  if(!micReady){ requestMic().then((ok) => { if(ok) startListening(); }); return; }
+  stopSpeaking(); setSpeaking(false);
+  heard = ""; gotAnything = false;
+  $("#draft").value = "";
+  wantListening = true;
+  startMeter();
+  try{
+    recog.start(); setListening(true);
+  }catch(e){
+    try{ recog.abort(); }catch(e2){}
+    setTimeout(() => {
+      try{ recog.start(); setListening(true); }
+      catch(e3){ wantListening = false; setListening(false);
+        note("The microphone did not start: " + (e3.message || e3)); }
+    }, 250);
+  }
+}
+
+function stopListeningAndSend(){
+  wantListening = false;
+  const peak = parseFloat(($("#meter") || {}).dataset ? $("#meter").dataset.peak || "0" : "0");
+  stopMeter();
+  if(!micReady){ setListening(false); return; }
+  try{ recog.stop(); }catch(e){}
+  setListening(false);
+  /* give the last words a moment to arrive before sending */
+  setTimeout(() => {
+    const text = $("#draft").value.trim();
+    heard = "";
+    if(text) submit(text);
+    else if(!gotAnything && peak > 0.05)
+      note("Your microphone is working — the bars moved — but the speech service returned nothing. "
+         + "That usually means it is blocked inside the presentation frame. Open demo.html on its own and try there.");
+    else if(!gotAnything)
+      note("No sound reached the microphone at all. Check that the right input device is selected in Windows.");
+    else note("I heard something but could not make out words. Try again, a little closer.");
+  }, 400);
+}
+
+function setListening(v){
+  listening = v;
+  $("#mic").classList.toggle("on", v);
+  $("#halo").classList.toggle("on", v || speaking);
+  $("#state").textContent = v
+    ? "listening — tap again when you are done"
+    : (!micOK ? "microphone unavailable — type instead"
+       : micReady ? "tap to speak" : "tap MIC above to enable the microphone");
+  Slime3D.set({ pulse: v || speaking });
+}
+
+let speaking = false;
+function setSpeaking(v){
+  speaking = v;
+  $("#halo").classList.toggle("on", v || listening);
+  Slime3D.set({ pulse: v || listening });
+}
+
+/* Browsers cut speechSynthesis off after roughly fifteen seconds, so long lines
+   have to go over in pieces. Sentences are the natural seam. */
+function chunk(text, max){
+  const parts = String(text).split(/([.!?…])\s+/).reduce((a, s, i, arr) => {
+    if(i % 2 === 0) a.push(s + (arr[i+1] || ""));
+    return a;
+  }, []).filter(Boolean);
+  const out = [];
+  parts.forEach((s) => {
+    if(out.length && (out[out.length - 1] + " " + s).length <= max) out[out.length - 1] += " " + s;
+    else out.push(s);
+  });
+  return out.length ? out : [String(text)];
+}
+
+let speakSeq = 0;
+function speakChunks(text){
+  const mine = ++speakSeq;
+  const parts = chunk(text, 160);
+  let i = 0;
+  (function next(){
+    if(mine !== speakSeq) return;               // a newer line took over
+    if(i >= parts.length){ setSpeaking(false); return; }
+    const part = parts[i++];
+    SlimeLipsync.speakVia(part, { rate:.95 });
+    setTimeout(next, Math.max(900, part.length * 68));
+  })();
+}
+
+function stopSpeaking(){
+  try{ speechSynthesis.cancel(); }catch(e){}
+  if(window.SlimeVoices) SlimeVoices.stop();
+  if(window.SlimeLipsync){ SlimeLipsync.stop(); SlimeLipsync.speakVia && sendStop(); }
+}
+function sendStop(){
+  /* cancelling speechSynthesis here does nothing to a character in an iframe —
+     it has its own. Tell it to stop. */
+  try{ SlimeLipsync.setExpression("neutral"); }catch(e){}
+  const f = $("#charFrame");
+  if(f && f.contentWindow) try{
+    f.contentWindow.postMessage({ source:"slime-lipsync", method:"stop", args:[] }, "*");
+  }catch(e){}
+}
+
+/* Which medium this person uses is in their profile, and it is a real choice,
+   not a preference to layer on top of everything else. Someone whose medium is
+   pictograms is not helped by a paragraph read aloud over the top of them. */
+function speechAllowed(){
+  const fmt = profile && profile.channel;
+  if(!currentPerson || !fmt) return true;        // no profile loaded: speak, as before
+  return fmt === "voice" || fmt === "story";
+}
+
+async function say(text){
+  lastSlime = text;
+  if(!text) return;
+  if(!speechAllowed()){ lastSlime = text; setSpeaking(false); return; }
+
+  speakSeq++;
+  const mine = speakSeq;
+  stopSpeaking();
+  setSpeaking(true);
+
+  const who   = window.SlimeVoices ? SlimeVoices.character() : "neutral";
+  const prof  = window.SlimeVoices ? SlimeVoices.profile(who) : { rate:1, pitch:1, lang:"en-GB" };
+  const parts = chunk(text, 160);
+  let i = 0;
+
+  /* ONE of these speaks, never both. Two engines running at once was cancelling
+     each other and skipping half the line. */
+  const next = () => {
+    if(mine !== speakSeq) return;
+    if(i >= parts.length){ setSpeaking(false); return; }
+    const part = parts[i++];
+
+    if(window.SlimeLipsync && SlimeLipsync.hasCharacter()){
+      /* the character's own engine: better lipsync, and it takes our voice settings */
+      SlimeLipsync.speakVia(part, {
+        rate: prof.rate, pitch: prof.pitch, lang: prof.lang,
+        voiceName: window.SlimeVoices ? SlimeVoices.voiceName(who) : null,
+      });
+      setTimeout(next, Math.max(900, part.length * 68));
+    } else if(window.SlimeVoices){
+      SlimeVoices.speak(part, who, { onDone: next });
+    } else {
+      setSpeaking(false);
+    }
+  };
+  next();
+}
+
+
+
+/* ══════════════════════════════════════════════════════════════
+   5 · RENDER
+   ══════════════════════════════════════════════════════════════ */
+const out = $("#out");
+const el = (tag, cls, txt) => { const n = document.createElement(tag); if(cls) n.className = cls; if(txt != null) n.textContent = txt; return n; };
+const scroll = () => { out.scrollTop = out.scrollHeight; };
+
+/* Fill picture frames from ARASAAC. Runs in parallel with the text, so a slow
+   lookup never holds up the answer, and a missing symbol leaves a dash rather
+   than an empty hole. */
+function fillPictos(steps, frames){
+  if(!window.SlimePictos) return;
+  (steps || []).forEach((label, i) => {
+    if(!frames[i]) return;
+    SlimePictos.find(label)
+      .then((url) => {
+        if(!url){ frames[i].innerHTML = "<span>—</span>"; return; }
+        const img = document.createElement("img");
+        img.alt = label;
+        img.onerror = () => { frames[i].innerHTML = "<span>—</span>"; };
+        img.onload = () => { frames[i].innerHTML = ""; frames[i].appendChild(img); };
+        img.src = url;
+      })
+      .catch(() => { frames[i].innerHTML = "<span>—</span>"; });
+  });
+  showCredit();
+}
+
+/* CC BY-NC-SA requires the credit to be visible wherever the pictograms are. */
+let creditShown = false;
+function showCredit(){
+  if(creditShown) return;
+  creditShown = true;
+  const p = el("p", "credit", SlimePictos.CREDIT);
+  out.appendChild(p); scroll();
+}
+
+function addYou(text){ out.appendChild(el("p","you",text)); scroll(); }
+function addErr(text){ out.appendChild(el("p","err",text)); scroll(); }
+
+function addThinking(label){
+  const p = el("p","thinking",label);
+  p.id = "thinking";
+  out.appendChild(p); scroll();
+}
+function clearThinking(){ const t = $("#thinking"); if(t) t.remove(); }
+
+function addTurn(r){
+  const box = el("div","turn");
+  if(r.say) box.appendChild(el("p","say",r.say));
+  const steps = r.steps || [];
+
+  if(r.mode === "voice" && steps.length){
+    const w = el("div","wave");
+    [0,90,180,60,240,120,30,210,150].forEach((d) => {
+      const i = document.createElement("i"); i.style.animationDelay = d + "ms"; w.appendChild(i);
+    });
+    box.appendChild(w);
+  }
+
+  if(r.mode === "story" && steps.length){
+    const rail = el("div","rail");
+    steps.forEach((_, i) => {
+      if(i) rail.appendChild(el("span","seg"));
+      rail.appendChild(el("span","stop"));
+    });
+    box.appendChild(rail);
+  }
+
+  let frames = [];
+  if(r.mode === "pictures" && steps.length){
+    const g = el("div","picts");
+    steps.forEach((s) => {
+      const c = el("div","pict");
+      const f = el("div","frame");
+      f.appendChild(el("span", null, "finding…"));
+      c.appendChild(f); c.appendChild(el("div","lbl",s));
+      g.appendChild(c); frames.push(f);
+    });
+    box.appendChild(g);
+  } else if(steps.length){
+    const ul = el("ul","steps");
+    steps.forEach((s) => ul.appendChild(el("li",null,s)));
+    box.appendChild(ul);
+  }
+
+  if(r.check){
+    box.appendChild(el("p","check",r.check));
+    const q = el("div","quick");
+    ["Yes, got it","Not really","Show me differently"].forEach((label) => {
+      const b = el("button",null,label);
+      b.onclick = () => { q.remove(); submit(label); };
+      q.appendChild(b);
+    });
+    box.appendChild(q);
+  }
+
+  out.appendChild(box); scroll();
+  return frames;
+}
+
+/* the profile panel */
+/* ══════════════════════════════════════════════════════════════
+   WHAT SLIME KNOWS
+   The same sections as the support profile in vision.html, in the same
+   order. This panel is the document, not a summary of it — anyone
+   reading it should recognise what they filled in.
+   ══════════════════════════════════════════════════════════════ */
+function ppRow(k, v){
+  const r = el("div", "row");
+  r.appendChild(el("span", null, k));
+  r.appendChild(el("span", v ? null : "none", v || "—"));
+  return r;
+}
+function ppSection(title, rows, listItems){
+  const rowsFiltered = (rows || []).filter(([, v]) => v);
+  if(!rowsFiltered.length && !(listItems || []).length) return null;
+  const w = el("div", "list");
+  w.appendChild(el("h3", null, title));
+  rowsFiltered.forEach(([k, v]) => w.appendChild(ppRow(k, v)));
+  (listItems || []).forEach((line) => w.appendChild(el("div", null, line)));
+  return w;
+}
+
+function paintProfile(){
+  $("#src").textContent = live() ? "DeepSeek via n8n" : "local demo — no backend connected";
+  $("#src").classList.toggle("live", live());
+  $("#rows").innerHTML = "";
+  $("#lists").innerHTML = "";
+
+  const pp = (currentPerson && window.SlimePeople) ? SlimePeople.view(currentPerson) : null;
+  const who = (pp && pp.who) || {}, com = (pp && pp.communication) || {},
+        wrong = (pp && pp.whenWrong) || {}, med = (pp && pp.medical) || {},
+        upd = (pp && pp.lastUpdate) || {};
+
+  $("#rows").appendChild(ppRow("showing", currentPerson || (missingFor ? missingFor + " — nothing on file" : "nobody yet")));
+  if(pp) $("#rows").appendChild(ppRow("source", pp._source));
+
+  if(!pp){
+    const warn = el("div", "list");
+    warn.appendChild(el("h3", null, "No profile loaded"));
+    warn.appendChild(el("div", "empty", missingFor
+      ? missingFor + " was recognised but has no saved profile."
+      : "Nobody has been recognised. Turn the camera on."));
+    $("#lists").appendChild(warn);
+  }
+
+  /* What the register actually holds, on screen rather than in the console.
+     Nearly every failure here is a name that does not match between the face
+     enrolled on camera and the profile saved in vision.html, and you cannot
+     see that unless both lists are in front of you. */
+  const reg = el("div", "list");
+  reg.appendChild(el("h3", null, "Profiles on this device"));
+  try{
+  const names = window.SlimePeople ? SlimePeople.all() : [];
+  if(!names.length){
+    reg.appendChild(el("div", "empty",
+      "None. Open vision.html, import a profile and press Save profile."));
+  } else {
+    names.forEach((n) => {
+      const v = SlimePeople.view(n);
+      reg.appendChild(el("div", null, n + " — "
+        + (v ? v._source + ", " + (SlimePeople.format(n) || "?") : "no profile")));
+    });
+  }
+  const enrolled = (window.SlimeVision && SlimeVision.people) ? SlimeVision.people() : [];
+  reg.appendChild(el("div", null, "Faces enrolled: "
+    + (enrolled.length ? enrolled.map((p) => p.name).join(", ") : "none on this device")));
+  reg.appendChild(el("div", "empty",
+    "These two lists must contain the SAME name for a profile to load."));
+  }catch(err){
+    reg.appendChild(el("div", "empty", "Could not read the register: " + (err.message || err)
+      + " — one of the .js files is out of date. Download the whole folder."));
+  }
+  $("#lists").appendChild(reg);
+
+  /* The same five sections as the form in vision.html, always, in the same order.
+     An empty field says "—" rather than disappearing: a support profile with a
+     gap in it should show the gap. */
+  [
+    ["Who am I?", [
+      ["Name", [who.name, who.surname].filter(Boolean).join(" ")],
+      ["Preferred name", who.preferredName],
+      ["Age", who.age], ["Date of birth", who.dob],
+      ["Special interest", who.specialInterest],
+      ["I like", who.likes], ["I dislike", who.dislikes],
+      ["IQ value", who.iq],
+      ["Skills / autonomy", who.skills],
+      ["Habits / routine", who.routine],
+      ["Comfortable", who.comfortable],
+      ["Uncomfortable", who.uncomfortable],
+    ], (who.emergency || []).map((c) => "Emergency: " + [c.name, c.relation, c.phone].filter(Boolean).join(" · "))],
+
+    ["My communication", [
+      ["How I express myself", com.expressMyself],
+      ["What I use most often", com.mostOften],
+      ["When it changes", com.changes],
+      ["How to communicate with me", com.howToCommunicate],
+      ["What helps me understand", com.whatHelps],
+      ["Format Slime uses", com.machineFormat || (pp ? "" : profile.channel)],
+      ["Spoken steps at once", com.stepsSpoken],
+      ["Pictures at once", com.stepsPictures],
+    ], []],
+
+    ["When something goes wrong", [
+      ["What stresses me", wrong.stressors],
+      ["How you can tell", wrong.signs],
+      ["How to help me calm down", wrong.calmMe],
+      ["Audio Slime plays", wrong.calmAudio],
+      ["Stimulus tolerance", wrong.stimulus],
+    ], []],
+
+    ["Medical safety", [
+      ["Condition", med.condition],
+      ["Epilepsy", med.epilepsy === true ? "Yes" : (med.epilepsy === false ? "No" : "")],
+      ["Type of seizure", med.seizureType],
+      ["Usual duration", med.seizureDuration],
+      ["What you should do", med.do],
+      ["What you should NOT do", med.doNot],
+      ["Allergy", med.allergy],
+    ], (med.medication || []).map((m) =>
+      [m.name, m.dose, m.frequency, m.why && "for " + m.why, m.precautions].filter(Boolean).join(" · "))],
+
+    ["Last update", [
+      ["Date", upd.date], ["Updated by", upd.by],
+      ["Professional", upd.organisation], ["What changed", upd.what],
+    ], (upd.history || []).slice(0, 5)],
+  ].forEach(([title, rows, list]) => {
+    const w2 = el("div", "list");
+    w2.appendChild(el("h3", null, title));
+    (rows || []).forEach(([k, v]) => w2.appendChild(ppRow(k, v)));
+    (list || []).forEach((line) => w2.appendChild(el("div", null, line)));
+    $("#lists").appendChild(w2);
+  });
+}
+
+
+
+function applyTheme(){
+  const P = theme.palette;
+  document.documentElement.style.setProperty("--tint",P.tint);
+  document.documentElement.style.setProperty("--accent",P.accent);
+  document.documentElement.style.setProperty("--bg",P.bg);
+  document.body.style.background = P.bg;
+  $("#who").textContent = theme.film ? theme.character + " · " + theme.film : "Slime";
+  Slime3D.set({ tint:P.tint, accent:P.accent, face:theme.face });
+}
+
+function setMode(){
+  const m = $("#mode");
+  m.textContent = live() ? "LIVE" : "DEMO";
+  m.className = "chip " + (live() ? "on" : "warn");
+}
+function note(msg){ const n = $("#note"); n.textContent = msg; n.style.display = msg ? "block" : "none"; }
+
+/* ══════════════════════════════════════════════════════════════
+   6 · FLOW
+   ══════════════════════════════════════════════════════════════ */
+async function submitFilm(answer){
+  addYou(answer);
+  phase = "theming"; busy = true; note("");
+  $("#question").textContent = "";
+  addThinking("changing shape…");
+  Slime3D.set({ busy:true });
+
+  let t;
+  try{
+    t = live()
+      ? Object.assign({}, DEFAULT_THEME, await callN8N({ action:"theme", system:THEME_PROMPT, user:"The film they named: " + answer }))
+      : localTheme(answer);
+    t.palette = Object.assign({}, DEFAULT_THEME.palette, t.palette || {});
+    t.face    = Object.assign({}, DEFAULT_THEME.face,    t.face    || {});
+  }catch(e){
+    t = localTheme(answer);
+    note("The backend did not answer, so Slime used a local persona.");
+  }
+
+  theme = t;
+  profile = Object.assign({}, EMPTY_PROFILE, { film:t.film, character:t.character });
+  clearThinking(); busy = false;
+  Slime3D.set({ busy:false });
+  applyTheme(); paintProfile();
+
+  /* Decide the face BEFORE saving, or the reload comes back without it. */
+  const pick = pickCharacter(t, answer);
+  charPage = pick ? { file:pick.file, name:pick.name } : null;
+  setCharacterPage(pick ? pick.file : null, pick ? pick.name : "neutral");
+  save();
+
+  /* Only bother generating a face for the gel when no character page took over.
+     Painting a portrait onto something nobody can see was wasted time and quota. */
+  Slime3D.set({ portrait:null });
+  if(live() && !charPage){
+    Slime3D.set({ portraitLoading:true });
+    /* n8n abstracts this into an original gel-creature brief before any image is drawn */
+    callN8N({ action:"portrait", character:t.character, film:t.film, prompt:t.portraitPrompt || "", tint:t.palette.tint })
+      .then((x) => { if(x.image) Slime3D.set({ portrait:x.image }); else Slime3D.set({ portraitLoading:false }); })
+      .catch(() => Slime3D.set({ portraitLoading:false }));
+  }
+
+  addTurn({ say:t.greeting, steps:[], mode:"text", check:null });
+  phase = "format";
+  $("#question").textContent = FORMAT_Q;
+  say(t.greeting + " " + FORMAT_Q);
+}
+
+function submitFormat(answer){
+  addYou(answer);
+  const a = answer.toLowerCase();
+  profile.channel = /pictur|draw|picto|image|symbol|dibujo/.test(a) ? "pictures"
+    : /voice|speak|aloud|hear|talk|tell/.test(a) ? "voice"
+    : /stor|tale|adventur|cuento/.test(a) ? "story" : "text";
+  phase = "chat";
+  $("#question").textContent = "";
+  paintProfile(); save();
+  const line = "Good. I will use " + profile.channel + ". Ask me about anything you need to do today.";
+  addTurn({ say:line, steps:[], mode:"text", check:null });
+  say(line);
+}
+
+async function submitChat(message){
+  addYou(message);
+  busy = true; addThinking("thinking…"); Slime3D.set({ busy:true });
+
+  /* Profiler — parallel, never blocks the answer */
+  if(live()){
+    callN8N({ action:"learn", system:LEARN_PROMPT,
+      user:"CURRENT PROFILE:\n" + JSON.stringify(profile,null,2) +
+           "\n\nCOMPANION'S LAST MESSAGE:\n" + lastSlime +
+           "\n\nLATEST REPLY:\n" + message })
+      .then((p) => {
+        profile = Object.assign({}, EMPTY_PROFILE, p, { film:profile.film, character:profile.character,
+          difficulty: Object.assign({}, EMPTY_PROFILE.difficulty, p.difficulty || {}) });
+        paintProfile(); save();
+      }).catch(() => {});
+  }
+
+  let r;
+  try{
+    r = live()
+      ? await callN8N({ action:"reply", system:replyPrompt(theme),
+          user: (currentPerson && window.SlimePeople && SlimePeople.report(currentPerson)
+                  ? "SUPPORT PROFILE for " + currentPerson + ":\n"
+                    + JSON.stringify(SlimePeople.report(currentPerson), null, 2)
+                    + "\n\nUSE IT. communication.preferredFormat decides the mode. Respect "
+                    + "stepsSpoken and stepsPictures. Draw your examples from interests. Never "
+                    + "suggest anything listed under dislikes. Follow regulation.avoid and the "
+                    + "medical section: if it says do not touch, never tell anyone to touch them."
+                  : "PROFILE:\n" + JSON.stringify(profile, null, 2))
+             + (present && present.name ? whoBlock(present) : "")
+             + "\n\nMESSAGE:\n" + message })
+      : localReply(message);
+  }catch(e){
+    r = localReply(message);
+    note("The backend did not answer, so that reply came from the local fallback.");
+  }
+
+  clearThinking(); busy = false;
+  Slime3D.set({ busy:false, mood:r.mood || "calm" });
+  const frames = addTurn(r);
+
+  /* Slime is a talking companion. It says everything it shows, whatever the visual
+     format is — pictures are how you SEE it, not a reason to go quiet. */
+  const spoken = [r.say].concat(r.steps || []).concat([r.check]).filter(Boolean).join(". ");
+  say(spoken);
+
+  /* real pictograms arrive after the text, so nothing waits on them */
+  /* ARASAAC is a public API — no backend, no key, no quota. Works in DEMO mode too. */
+  if(r.mode === "pictures" && frames.length) fillPictos(r.steps, frames);
+}
+
+function submit(text){
+  const v = (text || "").trim();
+  if(!v || busy) return;
+  $("#draft").value = ""; $("#draft").style.height = "auto";
+  if(window.SlimeScenes && SlimeScenes.active()){ addYou(v); if(SlimeScenes.handleReply(v)) return; }
+  if(phase === "film") submitFilm(v);
+  else if(phase === "format") submitFormat(v);
+  else submitChat(v);
+}
+
+let charPage = null;      // { file, name } — which avatar this session settled on
+
+function save(){
+  try{ localStorage.setItem(LS, JSON.stringify({ theme, profile, phase, charPage })); }catch(e){}
+}
+function restore(){
+  try{
+    const s = JSON.parse(localStorage.getItem(LS));
+    if(s && s.theme && s.profile){
+      theme = s.theme; profile = s.profile;
+      charPage = s.charPage || null;
+      phase = profile.channel ? "chat" : "format";
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7 · WIRING
+   ══════════════════════════════════════════════════════════════ */
+$("#mic").onclick = () => { listening ? stopListeningAndSend() : startListening(); };
+
+$("#send").onclick = () => submit($("#draft").value);
+$("#draft").addEventListener("keydown",(e) => { if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); submit($("#draft").value); } });
+$("#draft").addEventListener("input",(e) => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; });
+$("#togglePanel").onclick = () => { const p = $("#panel"); p.classList.toggle("on"); $("#togglePanel").classList.toggle("on", p.classList.contains("on")); };
+$("#mode").onclick = () => $("#setup").classList.toggle("on");
+$("#saveHook").onclick = () => {
+  hook = $("#hookInput").value.trim();
+  try{ localStorage.setItem(LS + ".hook", hook); }catch(e){}
+  setMode(); paintProfile(); $("#setup").classList.remove("on");
+};
+$("#reset").onclick = () => {
+  try{ localStorage.removeItem(LS); }catch(e){}
+  theme = JSON.parse(JSON.stringify(DEFAULT_THEME));
+  profile = JSON.parse(JSON.stringify(EMPTY_PROFILE));
+  phase = "film"; out.innerHTML = ""; note("");
+  charPage = null;
+  Object.keys(greeted).forEach((k) => delete greeted[k]);
+  currentPerson = null; missingFor = null;
+  endEmergency();
+  setCharacterPage(null, "neutral");
+  $("#panel").classList.remove("on"); $("#togglePanel").classList.remove("on");
+  applyTheme(); paintProfile();
+  $("#question").textContent = FILM_Q;
+  say(FILM_Q);
+};
+$("#toggleMic").onclick = () => requestMic();
+
+/* The microphone starts OFF, every time. A stored browser permission only means
+   the prompt would be skipped — it says nothing about whether capture actually
+   works on this machine. Only a real getUserMedia call is allowed to turn the
+   chip green, so it can never claim a microphone that is not there. */
+(async function(){
+  try{
+    if(navigator.permissions){
+      const st = await navigator.permissions.query({ name:"microphone" });
+      const paint = () => {
+        const chip = $("#toggleMic");
+        if(micReady) return;                        // already proven, leave it
+        chip.classList.remove("on");
+        if(st.state === "denied"){ chip.classList.add("warn"); chip.textContent = "MIC OFF"; }
+        else { chip.classList.remove("warn"); chip.textContent = "MIC"; }
+      };
+      paint(); st.onchange = paint;
+    }
+  }catch(e){}
+})();
+
+$("#toggleCam").onclick = async () => {
+  if(camOn){ SlimeVision.stop(); camOn = false; present = null; lastFaceAt = 0;
+    $("#toggleCam").classList.remove("on"); $("#toggleCam").textContent = "CAMERA"; return; }
+  if(!window.SlimeVision){ note("vision.js did not load."); return; }
+  const ok = await SlimeVision.start({
+    video: $("#camv"),
+    onStatus: (s) => { if(/blocked|unavailable|did not load/.test(s)) note("Camera: " + s); },
+    onPerson: (who) => {
+      present = who.name ? who : null;
+      $("#toggleCam").textContent = who.name ? who.name.toUpperCase() : "CAMERA";
+      if(window.__sceneOnPerson) window.__sceneOnPerson(who);
+    },
+    onFlag: (f) => {
+      /* a prompt to check, never a claim about what happened */
+      note(f.message);
+      console.log("[slime] flag raised", f);
+
+      /* The alert goes out on its own. It must NEVER depend on whether the
+         scene director happens to be switched on — that gate silently ate
+         every alert while scenes were disabled. */
+      startEmergency();          // the person first, always
+      if(live()){
+        callN8N(Object.assign({ action:"alert", source:"camera" }, f))
+          .then(() => note("Alert sent" + (f.person ? " about " + f.person + "." : ".")))
+          .catch((e) => note("The message did not go out: " + (e.message || e)
+            + ". The calming screen is running."));
+      } else {
+        note("Not connected to n8n, so no message was sent.");
+      }
+
+      /* the on-screen sequence is separate, and optional */
+      if(window.SlimeScenes && SlimeScenes.enabled()) SlimeScenes.onFlag(f);
+    },
+  });
+  if(ok){ camOn = true; $("#toggleCam").classList.add("on"); }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   THE ALERT BUTTON
+   Tap it and the same message goes out that the camera would send.
+   Hold it and it becomes draggable, so it can live wherever it is
+   reachable — a wall mount, a tablet in a stand, next to a bed.
+   Holding also means it cannot be fired by a knock or a sleeve.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════
+   THE EMERGENCY SEQUENCE
+   Fires on an alert — pressed or detected — and ONLY when the person in
+   front of the camera has a profile. With no profile there is nothing to
+   play and nothing to show, and guessing at either would be worse than
+   silence: the wrong music during a crisis is not neutral.
+
+   Both come from the person's own document, verbatim:
+     "Are there situations where my communication changes"
+        → the words in it are looked up as pictograms and shown large
+     "How can you help me calm down"
+        → names the audio file. "Beethoven music" plays Beethoven.mp3,
+          "Ludovico Einaudi music" plays Ludovico.mp3.
+   ══════════════════════════════════════════════════════════════ */
+let emAudio = null;
+
+/* ══════════════════════════════════════════════════════════════
+   AUDIO THAT ACTUALLY PLAYS
+   An <audio> element asks the browser for permission every time its src
+   changes, and inside an iframe it is refused more often than not. An
+   AudioContext asks ONCE: resume it during any gesture and everything
+   afterwards plays without asking again. So the music goes through Web
+   Audio, and the element is only a fallback.
+
+   The earlier attempt primed a MUTED element — muted playback is always
+   allowed, so it granted nothing. That is why the button kept appearing.
+   ══════════════════════════════════════════════════════════════ */
+let actx = null, emSource = null, emGain = null;
+const bufferCache = new Map();
+
+function ensureContext(){
+  try{
+    if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if(actx.state === "suspended") actx.resume();
+  }catch(e){}
+  return actx;
+}
+/* every gesture keeps it awake — cheap, and it costs nothing when already running */
+["pointerdown","keydown","touchstart"].forEach((ev) =>
+  addEventListener(ev, ensureContext, { capture:true }));
+
+/* The profile names "audio/Beethoven.mp3", but the file often ends up loose in
+   the folder instead. Both are the obvious place to put it, so try both rather
+   than make a missing subfolder the reason the music does not play. */
+function candidatePaths(file){
+  const bare = String(file).replace(/^audio\//, "");
+  return [file, bare, "audio/" + bare];
+}
+
+async function fetchFirst(paths){
+  for(const path of paths){
+    try{
+      const res = await fetch(path);
+      if(res.ok) return { res, path };
+    }catch(e){}
+  }
+  return null;
+}
+
+async function playCalmFile(file, volume){
+  stopEmergencyAudio();
+  const ctx = ensureContext();
+
+  if(ctx){
+    try{
+      let buf = bufferCache.get(file);
+      if(!buf){
+        const hit = await fetchFirst(candidatePaths(file));
+        if(!hit) throw new Error("HTTP 404");
+        if(hit.path !== file) console.log("[slime] found the audio at", hit.path);
+        buf = await ctx.decodeAudioData(await hit.res.arrayBuffer());
+        bufferCache.set(file, buf);
+      }
+      if(ctx.state === "suspended") await ctx.resume();
+      emGain = ctx.createGain();
+      emGain.gain.value = volume;
+      emGain.connect(ctx.destination);
+      emSource = ctx.createBufferSource();
+      emSource.buffer = buf;
+      emSource.loop = true;
+      emSource.connect(emGain);
+      emSource.start(0);
+      console.log("[slime] playing", file, "via Web Audio");
+      $("#emNote").textContent = "";
+      return;
+    }catch(e){
+      console.warn("[slime] Web Audio path failed:", e.message);
+      if(/HTTP|Failed to fetch|NetworkError/i.test(e.message || "")){
+        $("#emNote").textContent = "No audio. Looked for " + candidatePaths(file).join(" and ")
+          + " — put the mp3 in one of those places.";
+        return;
+      }
+    }
+  }
+
+  /* fallback: the plain element */
+  try{
+    emAudio = emAudio || new Audio();
+    emAudio.loop = true; emAudio.volume = volume; emAudio.muted = false;
+    emAudio.onerror = () => {
+      $("#emNote").textContent = "No audio. Looked for " + candidatePaths(file).join(" and ") + ".";
+    };
+    const hit = await fetchFirst(candidatePaths(file));
+    emAudio.src = hit ? hit.path : file;
+    await emAudio.play();
+    console.log("[slime] playing", file, "via element");
+  }catch(e){
+    console.warn("[slime] audio refused:", e.message);
+    $("#emNote").textContent = "The browser refused the sound. Click anywhere on the page, then raise the alert again.";
+  }
+}
+
+function stopEmergencyAudio(){
+  if(emSource){ try{ emSource.stop(); }catch(e){} try{ emSource.disconnect(); }catch(e){} emSource = null; }
+  if(emGain){ try{ emGain.disconnect(); }catch(e){} emGain = null; }
+  if(emAudio){ try{ emAudio.pause(); }catch(e){} }
+}
+
+/* the file is known the moment a profile loads, so decode it ahead of the crisis */
+async function warmCalmAudio(){
+  const v = (currentPerson && window.SlimePeople) ? SlimePeople.view(currentPerson) : null;
+  if(!v) return;
+  const file = calmAudioFor(v);
+  if(!file || bufferCache.has(file)) return;
+  const ctx = ensureContext();
+  if(!ctx) return;
+  try{
+    const hit = await fetchFirst(candidatePaths(file));
+    if(!hit){ console.warn("[slime] calm audio not found. Looked for:", candidatePaths(file).join(", ")); return; }
+    bufferCache.set(file, await ctx.decodeAudioData(await hit.res.arrayBuffer()));
+    console.log("[slime] calm audio ready:", hit.path);
+  }catch(e){}
+}
+
+/* Sentence starters and filler must not be mistaken for a composer. */
+const NOT_A_NAME = new Set(["Give","Play","Put","When","Yes","No","The","A","An","I","My","Me",
+  "Listen","Let","Try","Use","Show","Turn","Take","Stay","Speak","Keep","If","And","Or","With","He","She","They","It"]);
+
+function calmAudioFor(v){
+  const w = (v && v.whenWrong) || {};
+  if(w.calmAudio) return w.calmAudio;                     // set explicitly, use it
+  const text = w.calmMe || "";
+  /* a proper noun in the sentence is the piece: Beethoven, Ludovico, Chopin */
+  const names = (text.match(/\b[A-ZÀ-Ü][\wÀ-ÿ'’-]{2,}\b/g) || [])
+    .filter((x) => !NOT_A_NAME.has(x));
+  if(names.length) return "audio/" + names[0] + ".mp3";
+  /* No name given. Rather than invent a filename nobody has, fall back to a
+     piece that is actually in the folder — a generic "classical.mp3" that does
+     not exist is just silence with extra steps. */
+  if(/\b(classical|piano|calm|quiet|soft|instrumental)\b/i.test(text)) return "audio/Ludovico.mp3";
+  if(/\b(orchestra|symphony)\b/i.test(text)) return "audio/Beethoven.mp3";
+  return null;
+}
+
+const EM_STOP = new Set([
+  "when","im","i","am","is","are","my","me","the","a","an","of","to","in","on",
+  "and","or","yes","no","situations","there","where","communication","change","changes",
+  "pictures","picture","photo","photos","image","images","it","that","this","with","for","he","she","they",
+  /* Never draw the distress itself. The sentence says "when I am stressed, landscapes";
+     the landscape is what helps, the stress is the thing being escaped from, and a
+     pictogram of an upset person in the middle of a crisis does the opposite of
+     what this screen is for. */
+  "stress","stressed","stressful","anxious","anxiety","upset","angry","panic","crisis",
+  "overwhelmed","meltdown","distress","scared","afraid","sad","cry","crying",
+]);
+
+function calmWordsFor(v){
+  const c = (v && v.communication) || {};
+  return String(c.changes || "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .map((x) => x.trim())
+    .filter((x) => x.length > 2 && !EM_STOP.has(x.toLowerCase()))
+    .slice(0, 4);
+}
+
+async function startEmergency(){
+  /* Re-read first. The profile in memory was loaded when this person was
+     recognised, which may have been before the last edit in vision.html —
+     and playing yesterday's calming music is exactly the failure to avoid. */
+  if(window.SlimePeople && currentPerson) await SlimePeople.load();
+
+  const v = (currentPerson && window.SlimePeople) ? SlimePeople.view(currentPerson) : null;
+  if(!v){
+    console.log("[slime] alert raised with no profile loaded — nothing played, nothing shown");
+    return false;
+  }
+
+  const who = (v.who && v.who.preferredName) || currentPerson;
+  const calmMe = (v.whenWrong && v.whenWrong.calmMe) || "";
+  const changes = (v.communication && v.communication.changes) || "";
+  console.log("[slime] emergency for " + who + " (" + v._source + ")"
+    + "\n  calm down says: " + (calmMe || "(empty)")
+    + "\n  images from   : " + (changes || "(empty)"));
+
+  /* The person in crisis gets their name and the picture. The sentence in the
+     profile is an instruction to whoever is helping — putting a wall of text in
+     front of someone who is already overloaded is the opposite of the job. */
+  $("#emLine").textContent = who + ", let's slow down.";
+  $("#emPicts").innerHTML = "";
+  $("#emCredit").textContent = "";
+  $("#emNote").textContent = "";
+  $("#emergency").classList.add("on");
+
+  /* ── the audio their document names ── */
+  const file = calmAudioFor(v);
+  stopEmergencyAudio();
+  if(file){
+    console.log("[slime] calm audio resolved to", file);
+    await playCalmFile(file, typeof v.whenWrong.calmVolume === "number" ? v.whenWrong.calmVolume : 0.3);
+  } else {
+    console.log("[slime] no piece named in 'How can you help me calm down'");
+    $("#emNote").textContent = "No music named in this profile.";
+  }
+
+  /* ── the images their document asks for ── */
+  const words = calmWordsFor(v);
+  let shown = 0;
+  if(words.length && window.SlimePictos){
+    for(const word of words){
+      try{
+        const url = await SlimePictos.find(word);
+        console.log("[slime] pictogram for '" + word + "':", url || "not found");
+        if(!url) continue;
+        const fig = document.createElement("figure");
+        const img = document.createElement("img");
+        img.src = url; img.alt = word;
+        const cap = document.createElement("figcaption");
+        cap.textContent = word;
+        fig.appendChild(img); fig.appendChild(cap);
+        $("#emPicts").appendChild(fig);
+        shown++;
+        $("#emCredit").textContent = SlimePictos.CREDIT;
+      }catch(e){ console.warn("[slime] pictogram lookup failed for", word, e); }
+    }
+  }
+  if(!shown){
+    $("#emNote").textContent = ($("#emNote").textContent + " " +
+      (words.length
+        ? "No pictogram found for: " + words.join(", ") + "."
+        : "Nothing to show — 'Are there situations where my communication changes' is empty in this profile.")).trim();
+  }
+  return true;
+}
+
+function endEmergency(){
+  stopEmergencyAudio();
+  $("#emergency").classList.remove("on");
+  $("#emPicts").innerHTML = "";
+  console.log("[slime] emergency cleared");
+}
+
+$("#emSolved").onclick = () => {
+  endEmergency();
+  const v = (currentPerson && window.SlimePeople) ? SlimePeople.view(currentPerson) : null;
+  const who = (v && v.who && v.who.preferredName) || currentPerson || "";
+  const line = who ? "Good. I am here, " + who + "." : "Good. I am here.";
+  addTurn({ say:line, steps:[], mode:"text", check:null, tint:theme.palette.tint });
+  say(line);
+};
+
+(function(){
+  const btn = $("#alertBtn");
+  if(!btn) return;
+  const lbl = btn.querySelector(".lbl");
+
+  const POS = LS + ".alertPos";
+  try{
+    const saved = JSON.parse(localStorage.getItem(POS));
+    if(saved && typeof saved.x === "number"){
+      btn.style.left = saved.x + "px"; btn.style.top = saved.y + "px";
+      btn.style.right = "auto"; btn.style.bottom = "auto";
+    }
+  }catch(e){}
+
+  let holdTimer = null, armed = false, moved = false, dx = 0, dy = 0;
+
+  function place(x, y){
+    const w = btn.offsetWidth, hh = btn.offsetHeight;
+    x = Math.max(6, Math.min(x, innerWidth  - w  - 6));
+    y = Math.max(6, Math.min(y, innerHeight - hh - 6));
+    btn.style.left = x + "px"; btn.style.top = y + "px";
+    btn.style.right = "auto"; btn.style.bottom = "auto";
+  }
+
+  btn.addEventListener("pointerdown", (e) => {
+    moved = false; armed = false;
+    const r = btn.getBoundingClientRect();
+    dx = e.clientX - r.left; dy = e.clientY - r.top;
+    /* Holding only ARMS the drag. Nothing counts as a drag until the finger
+       actually moves — a long press on an emergency button is still a press. */
+    holdTimer = setTimeout(() => { armed = true; btn.classList.add("dragging"); }, 420);
+  });
+
+  btn.addEventListener("pointermove", (e) => {
+    if(!armed) return;
+    if(!moved){ moved = true; try{ btn.setPointerCapture(e.pointerId); }catch(err){} }
+    place(e.clientX - dx, e.clientY - dy);
+  });
+
+  function finish(){
+    clearTimeout(holdTimer);
+    btn.classList.remove("dragging");
+    if(moved){
+      const r = btn.getBoundingClientRect();
+      try{ localStorage.setItem(POS, JSON.stringify({ x:r.left, y:r.top })); }catch(e){}
+    }
+    armed = false;
+  }
+  btn.addEventListener("pointerup", finish);
+  btn.addEventListener("pointercancel", () => { moved = false; finish(); });
+
+  btn.addEventListener("click", () => {
+    if(moved){ moved = false; return; }     // that was a reposition
+    sendAlert();
+  });
+
+  function show(state, text, msg){
+    btn.classList.remove("sending", "sent", "failed");
+    if(state) btn.classList.add(state);
+    lbl.textContent = text;
+    if(msg) note(msg);
+    if(state !== "sending") setTimeout(() => {
+      btn.classList.remove("sent", "failed"); lbl.textContent = "ALERT";
+    }, 5000);
+  }
+
+  async function sendAlert(){
+    /* Never claim an alert was sent when it was not. */
+    if(!live()){
+      show("failed", "NO LINK", "Not connected to n8n, so nothing was sent. Paste the webhook URL in the DEMO panel.");
+      return;
+    }
+    /* Resolve through the register, which matches names case-insensitively.
+       The roster lookup used an exact key, so someone enrolled as "ALBERTO"
+       never matched the "Alberto" in it and the payload went out malformed —
+       which is why the button failed while the camera alert worked. */
+    const who = currentPerson || (present && present.name) || null;
+    const notify = (who && window.SlimePeople && SlimePeople.firstContact(who))
+      || (window.SlimeScenes && who && SlimeScenes.roster[who] && SlimeScenes.roster[who].alertTo)
+      || null;
+
+    show("sending", "…");
+
+    /* Calming the person and messaging their contact are separate jobs, and the
+       first must not wait on the second. A failed webhook is a reason to tell
+       someone the message did not go out — never a reason to leave the person
+       in front of the screen with nothing. */
+    startEmergency();
+
+    try{
+      /* the same shape the camera sends, so one path cannot work while the
+         other breaks on a field the workflow expected to be there */
+      const payload = {
+        action:"alert",
+        kind:"button-press",
+        source:"button",
+        person: who || null,
+        notify: notify || null,
+        contacts: null,
+        seconds: null,
+        at: new Date().toISOString(),
+        message:"Someone pressed the alert button and is asking for help.",
+      };
+      console.log("[slime] sending alert", payload);
+      const res = await callN8N(payload);
+      console.log("[slime] alert response", res);
+      if(res && res.error) throw new Error(res.error);
+      show("sent", "SENT", "Alert sent" + (notify ? " to " + notify + "." : "."));
+    }catch(e){
+      console.error("[slime] alert failed", e);
+      show("failed", "FAILED", "The alert did not reach " + (notify || "anyone") + ": "
+        + (e.message || e) + ". The calming screen is running; the message is not. Check Executions in n8n.");
+    }
+  }
+
+  /* so you can test it without the mouse: */
+  window.__slimeAlert = sendAlert;
+  /* console helpers: __slimeWho() lists the register, __slimeAs("Alberto")
+     loads a profile without needing the camera */
+  window.__slimeWho = () => {
+    if(!window.SlimePeople) return "people.js not loaded";
+    return SlimePeople.all().map((n) => {
+      const v = SlimePeople.view(n);
+      return n + " — " + (v ? v._source + ", format " + SlimePeople.format(n)
+                            : "no profile");
+    });
+  };
+  window.__slimeAs = (name) => {
+    delete greeted[name];
+    currentPerson = null;
+    SlimePeople.load().then(() => onRecognised({ name, role:"supported" }));
+  };
+})();
+
+/* ── profile panel: close, and print ── */
+$("#panelX").onclick = () => {
+  $("#panel").classList.remove("on");
+  $("#togglePanel").classList.remove("on");
+};
+
+$("#printProfile").onclick = () => {
+  const esc = (s) => String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const pp = (currentPerson && window.SlimePeople) ? SlimePeople.view(currentPerson) : null;
+
+  let title, body;
+  if(pp){
+    const who = pp.who || {}, com = pp.communication || {},
+          wrong = pp.whenWrong || {}, med = pp.medical || {}, upd = pp.lastUpdate || {};
+    const sec = (h2, rows, list) => {
+      const rs = (rows || []).filter(([, v]) => v);
+      if(!rs.length && !(list || []).length) return "";
+      return "<h2>" + esc(h2) + "</h2><table>"
+        + rs.map(([k, v]) => "<tr><td>" + esc(k) + "</td><td>" + esc(v) + "</td></tr>").join("")
+        + "</table>"
+        + ((list || []).length ? "<ul>" + list.map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul>" : "");
+    };
+    title = (who.preferredName || who.name || currentPerson) + " — support profile";
+    body = sec("Who am I?", [
+        ["Name", [who.name, who.surname].filter(Boolean).join(" ")],
+        ["Preferred name", who.preferredName], ["Age", who.age], ["Date of birth", who.dob],
+        ["Special interest", who.specialInterest], ["I like", who.likes], ["I dislike", who.dislikes],
+        ["IQ value", who.iq], ["Skills / autonomy", who.skills], ["Habits / routine", who.routine],
+        ["Comfortable", who.comfortable], ["Uncomfortable", who.uncomfortable],
+      ], (who.emergency || []).map((c) => "Emergency contact: " + [c.name, c.relation, c.phone].filter(Boolean).join(" · ")))
+      + sec("My communication", [
+        ["How I express myself", com.expressMyself], ["What I use most often", com.mostOften],
+        ["When it changes", com.changes], ["How to communicate with me", com.howToCommunicate],
+        ["What helps me understand", com.whatHelps], ["Format Slime uses", com.machineFormat],
+        ["Spoken steps at once", com.stepsSpoken], ["Pictures at once", com.stepsPictures],
+      ])
+      + sec("When something goes wrong", [
+        ["What stresses me", wrong.stressors], ["How you can tell", wrong.signs],
+        ["How to help me calm down", wrong.calmMe], ["Audio Slime plays", wrong.calmAudio],
+        ["Stimulus tolerance", wrong.stimulus],
+      ])
+      + sec("Medical safety", [
+        ["Condition", med.condition],
+        ["Epilepsy", med.epilepsy ? "Yes" : (med.epilepsy === false ? "No" : "")],
+        ["Type of seizure", med.seizureType], ["Usual duration", med.seizureDuration],
+        ["What you should do", med.do], ["What you should NOT do", med.doNot],
+        ["Allergy", med.allergy],
+      ], (med.medication || []).map((m) =>
+        [m.name, m.dose, m.frequency, m.why && "for " + m.why, m.precautions].filter(Boolean).join(" · ")))
+      + sec("Last update", [
+        ["Date", upd.date], ["Updated by", upd.by],
+        ["Professional", upd.organisation], ["What changed", upd.what],
+      ], upd.history || []);
+  } else {
+    const d = profile.difficulty || {};
+    title = "Slime — session profile";
+    body = "<h2>Session</h2><table>"
+      + [["Film", profile.film], ["Companion", profile.character], ["Format", profile.channel],
+         ["Detail", profile.detail], ["Stimulus", profile.stimulus], ["Pace", profile.pace],
+         ["Difficulty", d.level]]
+        .map(([k, v]) => "<tr><td>" + esc(k) + "</td><td>" + esc(v || "—") + "</td></tr>").join("")
+      + "</table><p>No support profile is loaded. Nobody has been recognised on camera.</p>";
+  }
+
+  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'/><title>" + esc(title) + "</title>"
+    + "<style>@page{margin:20mm 16mm}"
+    + "body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#111;line-height:1.55}"
+    + "h1{font-size:22px;margin:0 0 4px}.sub{font-size:12px;color:#666;margin-bottom:20px}"
+    + "h2{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#666;margin:20px 0 6px;font-weight:700;"
+    + "border-top:1px solid #e6e6e6;padding-top:12px}"
+    + "table{width:100%;border-collapse:collapse;margin-bottom:8px}"
+    + "td{padding:6px 0;border-bottom:1px solid #eee;font-size:13px;vertical-align:top}"
+    + "td:first-child{color:#666;width:42%}td:last-child{font-weight:600}"
+    + "ul{margin:6px 0 0;padding-left:16px;font-size:13px}li{margin-bottom:3px}"
+    + ".foot{margin-top:22px;padding-top:10px;border-top:1px solid #e6e6e6;font-size:10px;color:#888}"
+    + "</style></head><body><h1>" + esc(title) + "</h1>"
+    + "<div class='sub'>Printed " + new Date().toLocaleString() + "</div>"
+    + body
+    + "<div class='foot'>Demo record. Not a clinical document.</div></body></html>";
+
+  const w = window.open("", "_blank", "width=820,height=1000");
+  if(!w){ note("The browser blocked the print window. Allow pop-ups for this page."); return; }
+  w.document.write(html); w.document.close();
+  w.onload = () => { w.focus(); w.print(); };
+  setTimeout(() => { try{ w.focus(); w.print(); }catch(e){} }, 400);
+};
+
+/* Faces and profiles are per-origin browser storage, so they do not follow the
+   files around. Loading the exported file here puts them on THIS origin, which
+   is what makes the demo work from wherever it is being presented. */
+$("#dataFile").onchange = async (e) => {
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  try{
+    const data = JSON.parse(await f.text());
+    if(Array.isArray(data.faces) && data.faces.length && window.SlimeVision) SlimeVision.importFaces(data.faces, false);
+    if(data.profiles){
+      const cur = JSON.parse(localStorage.getItem("slime.passports") || "{}");
+      Object.keys(data.profiles).forEach((k) => { cur[k] = data.profiles[k]; });
+      localStorage.setItem("slime.passports", JSON.stringify(cur));
+    }
+    if(window.SlimePeople) await SlimePeople.load();
+    paintProfile();
+    note("Loaded " + ((data.faces || []).length) + " face(s) and "
+       + Object.keys(data.profiles || {}).length + " profile(s). Turn the camera on.");
+    $("#setup").classList.remove("on");
+  }catch(err){
+    note("Could not read that file: " + (err.message || err));
+  }finally{ e.target.value = ""; }
+};
+$("#hookInput").value = hook;
+/* off until you turn it on */
+$("#mic").disabled = true;
+$("#state").textContent = micOK ? "tap MIC above to enable the microphone"
+                                : "microphone unavailable — type instead";
+
+/* ══════════════════════════════════════════════════════════════
+   8 · THE 3D COMPANION
+   ══════════════════════════════════════════════════════════════ */
+/* what lipsync.js drives. Swap for a character iframe when you have one:
+   SlimeLipsync.detachAll(); SlimeLipsync.attach(document.getElementById("characterFrame")); */
+window.SlimeCharacter = {
+  setMouth: (v) => Slime3D.set({ mouth: v }),
+  setViseme: () => {},                     // the gel has one mouth shape, not a set
+  setExpression: (n) => Slime3D.set({ mood: n === "happy" ? "happy" : n === "thinking" ? "attentive" : "calm" }),
+};
+
+window.Slime3D = (function(){
+  const host = $("#gl");
+  let renderer, scene, camera, body, core, eyes, accGroup, featGroup, portraitMesh, mouth, mat, rim, fill, geo, base;
+  let mouthOpen = 0;
+  let hideEyes = false, hideAcc = false, portraitPending = false;
+  let busy3 = false, pulse = false, scale = 1, t = 0, blinkAt = 3, raf, hidden = false;
+  let eyeSize = .19, eyeH = .19, eyeSpread = .52;
+
+  function init(){
+    const W = host.clientWidth || 560, H = host.clientHeight || 300;
+    renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    renderer.setSize(W,H);
+    host.appendChild(renderer.domElement);
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(38, W/H, .1, 100);
+    camera.position.set(0,0,6.2);
+
+    geo = new THREE.IcosahedronGeometry(1.5, 36);
+    base = geo.attributes.position.array.slice();
+    mat = new THREE.MeshPhysicalMaterial({
+      color:new THREE.Color("#8AE6D2"), roughness:.12, metalness:0,
+      clearcoat:1, clearcoatRoughness:.08,
+      transparent:true, opacity:.93, transmission:.35,
+      emissive:new THREE.Color("#8AE6D2"), emissiveIntensity:.18,
+    });
+    body = new THREE.Mesh(geo, mat); scene.add(body);
+
+    core = new THREE.Mesh(new THREE.SphereGeometry(1.05,32,32),
+      new THREE.MeshBasicMaterial({ color:new THREE.Color("#F2B233"), transparent:true, opacity:.2 }));
+    scene.add(core);
+
+    const eyeMat = new THREE.MeshPhysicalMaterial({ color:0x06201f, roughness:.1, clearcoat:1 });
+    eyes = [new THREE.Mesh(new THREE.SphereGeometry(1,24,24), eyeMat),
+            new THREE.Mesh(new THREE.SphereGeometry(1,24,24), eyeMat)];
+    eyes.forEach((e) => scene.add(e));
+
+    accGroup = new THREE.Group(); scene.add(accGroup);
+    /* the mouth: a squashed sphere on the front, opened by setMouth(0..1) */
+    mouth = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20),
+      new THREE.MeshPhysicalMaterial({ color:0x06201f, roughness:.25, clearcoat:.8 }));
+    scene.add(mouth);
+    featGroup = new THREE.Group(); scene.add(featGroup);
+
+    scene.add(new THREE.AmbientLight(0xffffff,.55));
+    const key = new THREE.DirectionalLight(0xffffff,1.5); key.position.set(3,4,5); scene.add(key);
+    rim = new THREE.DirectionalLight(new THREE.Color("#F2B233"),1.1); rim.position.set(-4,-1,-3); scene.add(rim);
+    fill = new THREE.PointLight(new THREE.Color("#8AE6D2"),1.6,12); fill.position.set(0,0,3); scene.add(fill);
+
+    function fit(){
+      const w = host.clientWidth || 560, hh = host.clientHeight || 300;
+      renderer.setSize(w, hh); camera.aspect = w/hh; camera.updateProjectionMatrix();
+    }
+    addEventListener("resize", fit);
+    addEventListener("resize", () => setTimeout(centreCharacter, 80));
+    setTimeout(fit, 0);
+
+    const clock = new THREE.Clock();
+    (function loop(){
+      raf = requestAnimationFrame(loop);
+      t += clock.getDelta() * (busy3 ? 2.6 : 1);
+
+      const pos = geo.attributes.position;
+      for(let i = 0; i < pos.count; i++){
+        const x = base[i*3], y = base[i*3+1], z = base[i*3+2];
+        const n = Math.sin(x*2.1 + t*.9) * Math.cos(y*1.8 - t*.7) * Math.sin(z*2.3 + t*.5);
+        const k = 1 + n * (busy3 ? .10 : .055);
+        pos.array[i*3] = x*k; pos.array[i*3+1] = y*k; pos.array[i*3+2] = z*k;
+      }
+      pos.needsUpdate = true; geo.computeVertexNormals();
+
+      body.rotation.y = Math.sin(t*.25)*.22;
+      body.rotation.z = Math.sin(t*.19)*.07;
+      const breathe = 1 + Math.sin(t*.8)*.02;
+      body.scale.setScalar(scale*breathe);
+      core.scale.setScalar(scale*breathe);
+      core.rotation.y = -t*.3;
+
+      if(t > blinkAt) blinkAt = t + 3 + Math.random()*3;
+      const blinking = blinkAt - t < .14;
+      eyes.forEach((e,i) => {
+        e.visible = !hideEyes;
+        e.position.set((i === 0 ? -eyeSpread : eyeSpread)*scale, .18*scale, 1.28*scale);
+        e.scale.set(eyeSize*scale, (blinking ? .06 : eyeH)*scale, eyeSize*scale);
+      });
+      if(mouth){
+        const w   = (.30 + mouthOpen * .10) * scale;
+        const hgt = (.035 + mouthOpen * .30) * scale;
+        mouth.visible = !hideEyes || mouthOpen > .02;   // a drawn face brings its own mouth
+        mouth.position.set(0, (-.42 - mouthOpen * .06) * scale, 1.30 * scale);
+        mouth.scale.set(w, hgt, .12 * scale);
+        mouth.rotation.y = body.rotation.y;
+      }
+      accGroup.scale.setScalar(scale);
+      accGroup.rotation.y = body.rotation.y;
+      featGroup.scale.setScalar(scale);
+      featGroup.rotation.y = body.rotation.y;
+      featGroup.rotation.z = body.rotation.z;
+      if(portraitMesh){
+        portraitMesh.scale.setScalar(scale*breathe);
+        portraitMesh.rotation.y = body.rotation.y;
+        portraitMesh.rotation.z = body.rotation.z;
+      }
+
+      fill.intensity = 1.6 + (pulse ? Math.abs(Math.sin(t*5))*2.2 : 0);
+      if(!hidden) renderer.render(scene,camera);   // no point drawing what nobody sees
+    })();
+  }
+
+  function buildAccessory(kind, colorHex){
+    while(accGroup.children.length) accGroup.remove(accGroup.children[0]);
+    if(!kind || kind === "none") return;
+    const color = new THREE.Color(colorHex);
+    const M = () => new THREE.MeshPhysicalMaterial({ color, roughness:.3, metalness:.15, clearcoat:.6 });
+    const add = (m,p,r) => { m.position.set(p[0],p[1],p[2]); if(r) m.rotation.set(r[0],r[1],r[2]); accGroup.add(m); };
+
+    if(kind === "hat"){
+      add(new THREE.Mesh(new THREE.ConeGeometry(.7,1.1,24),M()),[0,1.75,0]);
+      add(new THREE.Mesh(new THREE.CylinderGeometry(1.05,1.05,.09,28),M()),[0,1.2,0]);
+    } else if(kind === "cap"){
+      add(new THREE.Mesh(new THREE.SphereGeometry(.95,24,16,0,Math.PI*2,0,Math.PI/2),M()),[0,1.05,0]);
+      add(new THREE.Mesh(new THREE.BoxGeometry(1.1,.07,.7),M()),[0,1.03,.9]);
+    } else if(kind === "crown"){
+      for(let i = 0; i < 6; i++){ const a = (i/6)*Math.PI*2;
+        add(new THREE.Mesh(new THREE.ConeGeometry(.13,.42,8),M()),[Math.cos(a)*.75,1.5,Math.sin(a)*.75]); }
+      add(new THREE.Mesh(new THREE.CylinderGeometry(.8,.8,.16,26),M()),[0,1.28,0]);
+    } else if(kind === "goggles"){
+      [-.52,.52].forEach((x) => add(new THREE.Mesh(new THREE.TorusGeometry(.3,.07,12,26),M()),[x,.2,1.28]));
+      add(new THREE.Mesh(new THREE.TorusGeometry(1.45,.06,10,40),M()),[0,.2,0]);
+    } else if(kind === "mask"){
+      add(new THREE.Mesh(new THREE.BoxGeometry(2.1,.5,.14),M()),[0,.2,1.28]);
+    } else if(kind === "ears"){
+      [-.72,.72].forEach((x) => add(new THREE.Mesh(new THREE.ConeGeometry(.34,.72,16),M()),[x,1.42,0],[0,0,x<0?.3:-.3]));
+    } else if(kind === "antenna"){
+      add(new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.85,10),M()),[0,1.85,0]);
+      add(new THREE.Mesh(new THREE.SphereGeometry(.21,20,20),M()),[0,2.3,0]);
+    } else if(kind === "helmet"){
+      const m = M(); m.transparent = true; m.opacity = .32; m.roughness = .05;
+      add(new THREE.Mesh(new THREE.SphereGeometry(1.72,30,24),m),[0,.1,0]);
+    } else if(kind === "bow"){
+      [-.42,.42].forEach((x) => add(new THREE.Mesh(new THREE.ConeGeometry(.3,.55,4),M()),[x,1.5,0],[0,0,x<0?Math.PI/2:-Math.PI/2]));
+      add(new THREE.Mesh(new THREE.SphereGeometry(.14,14,14),M()),[0,1.5,0]);
+    } else if(kind === "scarf"){
+      add(new THREE.Mesh(new THREE.TorusGeometry(1.2,.17,12,32),M()),[0,-1.05,0],[Math.PI/2,0,0]);
+    }
+  }
+
+  /* ── sculpted features: instant, no backend, works in DEMO mode ── */
+  function buildFeatures(list, colorHex){
+    while(featGroup.children.length) featGroup.remove(featGroup.children[0]);
+    if(!list || !list.length) return;
+    const color = new THREE.Color(colorHex || "#F0D26B");
+    const M = (o) => new THREE.MeshPhysicalMaterial(Object.assign({ color, roughness:.35, metalness:.05, clearcoat:.5 }, o||{}));
+    const skin = () => new THREE.MeshPhysicalMaterial({ color:new THREE.Color(mat.color.getHex()), roughness:.15, clearcoat:1 });
+    const add = (m,p,r,s) => { m.position.set(p[0],p[1],p[2]); if(r) m.rotation.set(r[0],r[1],r[2]); if(s) m.scale.set(s[0],s[1],s[2]); featGroup.add(m); };
+
+    list.forEach((f) => {
+      if(f === "wings"){                       /* the winged helmet, as two blades */
+        [-1, 1].forEach((s) => {
+          const w = new THREE.Mesh(new THREE.ConeGeometry(.34, 1.05, 3), M({ metalness:.25 }));
+          add(w, [s*1.02, 1.22, .1], [Math.PI*.5, 0, s*-.55], [1, 1, .28]);
+        });
+      } else if(f === "moustache"){
+        [-1, 1].forEach((s) => {
+          const m = new THREE.Mesh(new THREE.SphereGeometry(.3, 20, 16), M());
+          add(m, [s*.3, -.42, 1.3], [0, 0, s*.5], [1.35, .52, .5]);
+        });
+      } else if(f === "bignose"){
+        add(new THREE.Mesh(new THREE.SphereGeometry(.27, 22, 22), skin()), [0, -.1, 1.44], null, [1, .92, 1.1]);
+      } else if(f === "braids"){
+        [-1, 1].forEach((s) => {
+          for(let i = 0; i < 3; i++)
+            add(new THREE.Mesh(new THREE.SphereGeometry(.17 - i*.02, 14, 14), M()),
+                [s*(1.02 + i*.05), .35 - i*.32, .62 - i*.06]);
+        });
+      } else if(f === "hair"){
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(1.56, 30, 20, 0, Math.PI*2, 0, .82), M());
+        add(cap, [0, .06, 0]);
+      } else if(f === "beard"){
+        add(new THREE.Mesh(new THREE.SphereGeometry(.72, 24, 20), M()), [0, -.92, .82], null, [1.15, .95, .7]);
+      } else if(f === "brows"){
+        [-1, 1].forEach((s) => {
+          const b = new THREE.Mesh(new THREE.BoxGeometry(.42, .1, .1), M());
+          add(b, [s*eyeSpread, .5, 1.3], [0, 0, s*-.2]);
+        });
+      }
+    });
+  }
+
+  /* ── the generated portrait, projected onto the front of the gel ── */
+  function setPortrait(dataUrl){
+    if(portraitMesh){
+      scene.remove(portraitMesh);
+      if(portraitMesh.material.map) portraitMesh.material.map.dispose();
+      portraitMesh.material.dispose(); portraitMesh.geometry.dispose();
+      portraitMesh = null;
+    }
+    hideEyes = false; hideAcc = false;
+    if(accGroup) accGroup.visible = true;
+    if(featGroup) featGroup.visible = true;
+    if(!dataUrl) return;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const S = 768;
+      const src = document.createElement("canvas");
+      src.width = src.height = S;
+      const sx = src.getContext("2d");
+      sx.drawImage(img, 0, 0, S, S);
+
+      /* 1 · knock the black background out to alpha */
+      const d = sx.getImageData(0, 0, S, S), px = d.data;
+      for(let i = 0; i < px.length; i += 4){
+        const lum = (px[i]*.299 + px[i+1]*.587 + px[i+2]*.114) / 255;
+        px[i+3] = lum < .12 ? 0 : lum < .28 ? Math.round(((lum - .12) / .16) * 255) : 255;
+      }
+      sx.putImageData(d, 0, 0);
+
+      /* 2 · find what is actually drawn, so a small head does not stay small */
+      let minX = S, minY = S, maxX = 0, maxY = 0, found = false;
+      for(let y = 0; y < S; y++){
+        for(let x = 0; x < S; x++){
+          if(px[(y*S + x)*4 + 3] > 24){
+            found = true;
+            if(x < minX) minX = x; if(x > maxX) maxX = x;
+            if(y < minY) minY = y; if(y > maxY) maxY = y;
+          }
+        }
+      }
+      if(!found){ minX = 0; minY = 0; maxX = S - 1; maxY = S - 1; }
+
+      /* 3 · redraw it centred and scaled to fill the face */
+      const bw = maxX - minX + 1, bh = maxY - minY + 1;
+      const side = Math.max(bw, bh) * 1.06;
+      const out = document.createElement("canvas");
+      out.width = out.height = S;
+      const ox = out.getContext("2d");
+      ox.drawImage(src, minX - (side - bw)/2, minY - (side - bh)/2, side, side, 0, 0, S, S);
+
+      const tex = new THREE.CanvasTexture(out);
+      tex.needsUpdate = true;
+
+      /* a wide patch: the face owns the whole front, not a sticker in the middle */
+      const geoP = new THREE.SphereGeometry(1.515, 64, 64,
+        Math.PI/2 - 1.02, 2.04, Math.PI/2 - 1.02, 2.04);
+      const matP = new THREE.MeshStandardMaterial({
+        map:tex, transparent:true, roughness:.30, metalness:0,
+        emissiveMap:tex, emissive:new THREE.Color(0xffffff), emissiveIntensity:.55,
+        depthWrite:false, side:THREE.FrontSide,
+      });
+      portraitMesh = new THREE.Mesh(geoP, matP);
+      scene.add(portraitMesh);
+
+      /* the drawing brings its own eyes and its own headwear — stop competing with it */
+      hideEyes = true; hideAcc = true;
+      if(accGroup) accGroup.visible = false;
+      if(featGroup) featGroup.visible = false;
+    };
+    img.onerror = () => {};
+    img.src = dataUrl;
+  }
+
+  const EYES = { round:[.19,.19,.52], large:[.26,.26,.5], narrow:[.2,.08,.52], wide:[.21,.21,.64] };
+
+  function set(o){
+    if(!renderer) return;
+    if(o.tint){ mat.color.set(o.tint); mat.emissive.set(o.tint); fill.color.set(o.tint); }
+    if(o.accent){ core.material.color.set(o.accent); rim.color.set(o.accent); }
+    if(o.face){
+      const e = EYES[o.face.eyes] || EYES.round;
+      eyeSize = e[0]; eyeH = e[1]; eyeSpread = e[2];
+      buildAccessory(o.face.accessory, o.face.accessoryColor || "#F2B233");
+      buildFeatures(o.face.features, o.face.featureColor || o.face.accessoryColor);
+    }
+    if(o.portrait !== undefined) setPortrait(o.portrait);
+    if(o.portraitLoading !== undefined) portraitPending = !!o.portraitLoading;
+    if(o.busy !== undefined) busy3 = o.busy;
+    if(o.pulse !== undefined) pulse = o.pulse;
+    if(o.mood) scale = o.mood === "happy" ? 1.08 : o.mood === "attentive" ? 1.03 : 1;
+    if(o.mouth !== undefined) mouthOpen = Math.max(0, Math.min(1, o.mouth));
+    if(o.hidden !== undefined){
+      hidden = !!o.hidden;
+      if(renderer) renderer.domElement.style.display = hidden ? "none" : "block";
+    }
+  }
+
+  init();
+  return { set };
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   9 · GO
+   ══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   WHERE THE DATA COMES FROM
+   Browser storage is tied to the exact origin, so localhost:8000 and
+   127.0.0.1:8000 keep separate copies and enrolling on one leaves the
+   other empty. Chasing that every time is not worth it: if the folder
+   contains slime-data.json, that file wins and is loaded into this
+   origin on every start. Export once from vision.html, drop it beside
+   the html files, and it works from anywhere.
+   ══════════════════════════════════════════════════════════════ */
+async function loadDeviceData(){
+  try{
+    const r = await fetch("slime-data.json", { cache:"no-store" });
+    if(!r.ok) return false;
+    const data = await r.json();
+    const faces = Array.isArray(data.faces) ? data.faces : [];
+    const profiles = (data.profiles && typeof data.profiles === "object") ? data.profiles : {};
+
+    /* An empty or placeholder file must NEVER touch what is already on the
+       device. A previous version replaced everything with nothing on every
+       load, which silently deleted every enrolment and profile the moment
+       the demo opened. Only merge, and only when there is something to merge. */
+    if(!faces.length && !Object.keys(profiles).length){
+      console.log("[slime] slime-data.json is empty — leaving device data alone");
+      return false;
+    }
+    let n = 0;
+    if(faces.length && window.SlimeVision) n = SlimeVision.importFaces(faces, false);
+    if(Object.keys(profiles).length){
+      try{
+        const cur = JSON.parse(localStorage.getItem("slime.passports") || "{}");
+        Object.keys(profiles).forEach((k) => { cur[k] = profiles[k]; });
+        localStorage.setItem("slime.passports", JSON.stringify(cur));
+      }catch(e){}
+    }
+    console.log("[slime] slime-data.json merged:", faces.length, "face(s),",
+      Object.keys(profiles).length, "profile(s) — device now holds", n, "face(s)");
+    return true;
+  }catch(e){ return false; }
+}
+
+
+(async function(){
+  await loadDeviceData();
+  if(window.SlimePeople){
+    const p = await SlimePeople.load();
+    console.log("[slime] register:", Object.keys(p).join(", ") || "empty",
+      "| with profiles:", SlimePeople.all().filter((n) => SlimePeople.report(n)).join(", ") || "none");
+  }
+  paintProfile();
+})();
+if(window.SlimeLipsync) SlimeLipsync.attach(window.SlimeCharacter);
+
+/* ARASAAC first, always. Gemini only draws the words it does not have, and only
+   when a backend is connected. */
+if(window.SlimePictos) SlimePictos.setFallback((label) => {
+  if(!live()) return Promise.resolve(null);
+  return callN8N({ action:"picto", label, tint:theme.palette.tint })
+    .then((x) => x.image || null)
+    .catch(() => null);
+});
+
+/* ══════════════════════════════════════════════════════════════
+   BEING RECOGNISED
+   If Slime already knows you, it should not ask who you are. Seeing a
+   familiar face loads that person's profile, puts on their companion and
+   greets them by name — the onboarding is skipped entirely, because the
+   report already answers everything it would have asked.
+   ══════════════════════════════════════════════════════════════ */
+const greeted = {};
+let currentPerson = null;      // whose passport the panel is showing
+let missingFor = null;         // recognised, but nothing on file
+
+function onRecognised(who){
+  if(!who || !who.name) return;
+
+  const p = window.SlimePeople ? SlimePeople.get(who.name) : null;
+  const hasProfile = !!(p && p.role === "supported" && p.report);
+
+  /* Loading the profile and saying hello are separate jobs. They used to share
+     one guard, so if someone was seen BEFORE their profile was saved, they were
+     marked as greeted and the profile never loaded again — no matter how many
+     times the camera saw them afterwards. */
+  const alreadyLoaded = (currentPerson === who.name);
+  const firstTime = !greeted[who.name];
+
+  if(!hasProfile){
+    if(currentPerson === who.name){ currentPerson = null; }
+    missingFor = who.name;
+    paintProfile();
+    if(firstTime){
+      greeted[who.name] = true;
+      const hi = "Hello " + who.name + ". How are you doing today?";
+      addTurn({ say:hi, steps:[], mode:"text", check:null, tint:theme.palette.tint });
+      say(hi);
+      console.log("[slime] " + who.name + " recognised, but no support profile.",
+        "known:", p ? "yes (role " + p.role + ")" : "no",
+        "| on this device:", window.SlimePeople ? SlimePeople.all().join(", ") : "none");
+    }
+    return;
+  }
+
+  missingFor = null;
+  waitedForFace = true;          // somebody is here; do not fall back
+  if(alreadyLoaded) return;                  // nothing changed, leave them be
+
+  currentPerson = who.name;
+  const view = SlimePeople.view(who.name) || {};
+  const w = view.who || {};
+
+  profile = Object.assign({}, EMPTY_PROFILE, SlimePeople.flat(who.name), {
+    film: w.specialInterest || null,
+    character: w.preferredName || who.name,
+  });
+  phase = "chat";
+  $("#question").textContent = "";
+
+  /* SPECIAL INTEREST IS THE COMPANION.
+     The document already says what this person loves, so the film question —
+     which only ever existed to find that out — is skipped. */
+  const interest = [w.specialInterest, w.likes].filter(Boolean).join(" ");
+  const explicit = view.companion || SlimePeople.character(who.name);
+  const named = explicit && CHARACTER_PAGES.find((c) => c.name === explicit);
+  const pick = named || pickCharacter({ character:w.specialInterest, film:w.specialInterest }, interest);
+  charPage = pick ? { file:pick.file, name:pick.name } : null;
+  setCharacterPage(pick ? pick.file : null, pick ? pick.name : "neutral");
+
+  paintProfile(); save();
+  warmCalmAudio();
+
+  console.log("[slime] loaded " + who.name
+    + " — source " + (view._source || "?")
+    + ", format " + profile.channel
+    + ", interest '" + (w.specialInterest || "none") + "'"
+    + ", companion " + (pick ? pick.name : "the gel"));
+
+  /* greet once, but only now that we actually know who they are */
+  if(firstTime){
+    greeted[who.name] = true;
+    const hi = "Hello " + (w.preferredName || who.name) + ". How are you doing today?";
+    addTurn({ say:hi, steps:[], mode:"text", check:null, tint:theme.palette.tint });
+    say(hi);
+  }
+
+  if(live() && w.specialInterest){
+    callN8N({ action:"theme", system:THEME_PROMPT, user:"The thing they love: " + w.specialInterest })
+      .then((t) => {
+        theme = Object.assign({}, theme, t, { palette: Object.assign({}, theme.palette, t.palette || {}) });
+        applyTheme();
+        if(charPage) setCharacterPage(charPage.file, charPage.name);
+      })
+      .catch(() => {});
+  }
+}
+
+/* ── swapping Slime's face. Used by the film question, and by the director if enabled ── */
+/* The character pages anchor their artwork near the top of their own viewport
+   rather than centring it, and each one sits at a different height. Since every
+   file is served from the same origin we can simply MEASURE where the figure
+   landed and slide the iframe so it lands in the middle. Read-only: we never
+   touch the character's own layout, which is what broke it before. */
+function centreCharacter(){
+  const f = $("#charFrame");
+  if(!f || !f.style) return;
+  let doc;
+  try{ doc = f.contentDocument; }catch(e){ return; }      // cross-origin: leave as is
+  if(!doc || !doc.body) return;
+
+  const roots = Array.prototype.slice.call(doc.querySelectorAll("svg"))
+    .filter((s) => !s.parentElement || !s.parentElement.closest("svg"));
+  let top = Infinity, bottom = -Infinity;
+  roots.forEach((s) => {
+    const r = s.getBoundingClientRect();
+    if(r.height > 40){ top = Math.min(top, r.top); bottom = Math.max(bottom, r.bottom); }
+  });
+  if(!isFinite(top) || bottom <= top) return;
+
+  const delta = (f.clientHeight / 2) - ((top + bottom) / 2);
+  f.style.transform = "translateY(" + Math.round(delta) + "px)";
+}
+
+function setCharacterPage(file, name){
+  const f = $("#charFrame"), gl = $("#gl");
+  if(file){
+    if(f.getAttribute("src") !== file){
+      f.style.transform = "";
+      f.src = file;
+      /* the figure needs a moment to draw before it can be measured */
+      f.onload = () => { [120, 400, 900, 1800].forEach((d) => setTimeout(centreCharacter, d)); };
+    } else {
+      setTimeout(centreCharacter, 60);
+    }
+    gl.classList.add("has-char");
+    if(window.Slime3D) Slime3D.set({ hidden:true });   // the gel steps aside entirely
+    SlimeLipsync.detachAll(); SlimeLipsync.attach(f);
+    /* a missing character page must never kill the demo */
+    f.onerror = () => {
+      gl.classList.remove("has-char");
+      if(window.Slime3D) Slime3D.set({ hidden:false });
+      SlimeLipsync.detachAll(); SlimeLipsync.attach(window.SlimeCharacter);
+      note("Character page " + file + " did not load. Using Slime's own face.");
+    };
+  } else {
+    gl.classList.remove("has-char");
+    f.style.transform = "";
+    f.removeAttribute("src");
+    if(window.Slime3D) Slime3D.set({ hidden:false });
+    SlimeLipsync.detachAll(); SlimeLipsync.attach(window.SlimeCharacter);
+  }
+  if(window.SlimeVoices) SlimeVoices.setCharacter(name || "neutral");
+  $("#who").textContent = (name && name !== "neutral")
+    ? name.toUpperCase()
+    : (theme.film ? theme.character + " · " + theme.film : "Slime");
+  if(window.__slimeResize) window.__slimeResize();
+}
+
+
+/* ── the scene director drives these; every one of them is a real component ── */
+if(window.SlimeScenes) SlimeScenes.init({
+  say: (t) => { addTurn({ say:t, steps:[], mode:"text", check:null, tint:theme.palette.tint }); say(t); },
+  showSteps: (r) => {
+    const frames = addTurn(Object.assign({ tint:theme.palette.tint }, r));
+    const spoken = [r.say].concat(r.steps || []).concat([r.check]).filter(Boolean).join(". ");
+    say(spoken);
+    if(r.mode === "pictures" && frames.length) fillPictos(r.steps, frames);
+  },
+  setCharacter: (file, name) => setCharacterPage(file, name),
+  setProfile: (p) => { profile = Object.assign({}, profile, p); paintProfile(); },
+
+  /* same request, one profile each — this is where the value proposition happens */
+  ask: async (personProfile, request, from) => {
+    const msg = (from ? from + " asks: " : "") + request;
+    if(live()){
+      try{
+        return await callN8N({ action:"reply", system:replyPrompt(theme),
+          user:"PROFILE:\n" + JSON.stringify(personProfile, null, 2) + "\n\nMESSAGE:\n" + msg });
+      }catch(e){ /* fall through */ }
+    }
+    return localReply(request, personProfile);
+  },
+
+  /* the profile sheet, on screen, because the screen is what the room sees */
+  showProfile: (subject, cfg, doctor) => {
+    const d = cfg.doc || {};
+    const box = document.createElement("div");
+    box.className = "sheet";
+
+    const sec = (title, items) => {
+      if(!items || !items.length) return "";
+      const li = items.map((x) => "<li></li>").join("");
+      return '<div class="sh-s"><h4></h4><ul>' + li + "</ul></div>";
+    };
+    box.innerHTML =
+      '<div class="sh-h"><strong></strong><span></span></div>' +
+      '<div class="sh-meta"></div>' +
+      '<div class="sh-b"><p class="sh-sum"></p></div>' +
+      '<div class="sh-secs"></div>' +
+      '<div class="sh-f"></div>';
+
+    box.querySelector("strong").textContent = (d.name || subject) + " — support profile";
+    box.querySelector(".sh-h span").textContent = d.reference || "";
+    const meta = box.querySelector(".sh-meta");
+    [["Report date", d.reportDate], ["Author", d.author], ["Setting", d.setting]]
+      .forEach(([k, v]) => {
+        const r = document.createElement("div"); r.className = "sh-r";
+        r.innerHTML = "<span></span><b></b>";
+        r.querySelector("span").textContent = k;
+        r.querySelector("b").textContent = v || "—";
+        meta.appendChild(r);
+      });
+    box.querySelector(".sh-sum").textContent = d.summary || "";
+
+    const secs = box.querySelector(".sh-secs");
+    const c = d.communication || {}, s = d.sensory || {}, l = d.learning || {}, g = d.regulation || {};
+    const blocks = [
+      ["Communication", [
+        "Preferred format: " + (c.preferredFormat || "—") + ", then " + (c.secondFormat || "—"),
+        "Detail: " + (c.detail || "—") + " · Pace: " + (c.pace || "—"),
+      ].concat(c.notes || [])],
+      ["Sensory", ["Stimulus tolerance: " + (s.stimulus || "—")].concat(s.notes || [])],
+      ["What works", l.worksWell || []],
+      ["What does not work", l.doesNotWork || []],
+      ["Interests", d.interests || []],
+      ["Early signs", g.earlySigns || []],
+      ["What helps", g.helps || []],
+      ["What to avoid", g.avoid || []],
+      ["Contacts", (d.contacts || []).map((x) => x.name + " — " + x.relation + " (" + x.role + ")")],
+    ];
+    blocks.forEach(([title, items]) => {
+      if(!items || !items.length) return;
+      const wrap = document.createElement("div"); wrap.className = "sh-s";
+      const hd = document.createElement("h4"); hd.textContent = title; wrap.appendChild(hd);
+      const ul = document.createElement("ul");
+      items.forEach((x) => { const li = document.createElement("li"); li.textContent = x; ul.appendChild(li); });
+      wrap.appendChild(ul); secs.appendChild(wrap);
+    });
+
+    box.querySelector(".sh-f").textContent =
+      "Released to Dr " + doctor + " · fictional demo record · Ctrl+P to save as PDF";
+    out.appendChild(box); scroll();
+  },
+});
+
+/* the camera feeds the director */
+window.__sceneOnPerson = (who) => {
+  if(who && who.name) lastFaceAt = Date.now();
+  /* Profiles are written in vision.html, in another tab, after this page loaded
+     its copy. Re-read before greeting, or a profile saved five minutes ago is
+     invisible until someone reloads — which is exactly what went wrong. */
+  if(who && who.name && window.SlimePeople && currentPerson !== who.name){
+    SlimePeople.load().then(() => {
+      onRecognised(who);
+      if(window.SlimeScenes) SlimeScenes.personSeen(who);
+    });
+    return;
+  }
+  onRecognised(who);
+  if(window.SlimeScenes) SlimeScenes.personSeen(who);
+};
+/* If there is no camera, or nobody is recognised within a few seconds, stop
+   waiting and be the ordinary companion: ask the film question like always.
+   A screen that sits there saying nothing because it hoped to know you is
+   worse than one that simply asks. */
+const RECOGNISE_WINDOW = 5000;
+
+/* ══════════════════════════════════════════════════════════════
+   GOING BACK TO BEING NOBODY'S COMPANION
+   Slime holds someone's profile while they are there. Once the camera
+   has not seen them for a minute — or is switched off — it lets go and
+   becomes the plain companion again, asking the film question.
+
+   Holding a profile open on an empty room is the wrong default: the next
+   person to sit down would be spoken to as someone else, with someone
+   else's format and someone else's document on screen.
+   ══════════════════════════════════════════════════════════════ */
+const IDLE_RESET = 60000;
+let lastFaceAt = Date.now();
+
+function resetToBase(why){
+  console.log("[slime] back to base —", why);
+  currentPerson = null; missingFor = null;
+  charPage = null;
+  Object.keys(greeted).forEach((k) => delete greeted[k]);
+  profile = JSON.parse(JSON.stringify(EMPTY_PROFILE));
+  theme = JSON.parse(JSON.stringify(DEFAULT_THEME));
+  phase = "film";
+  applyTheme();
+  setCharacterPage(null, "neutral");
+  paintProfile();
+  save();
+  $("#question").textContent = FILM_Q;
+  say(FILM_Q);
+}
+
+setInterval(() => {
+  /* never interrupt a crisis: someone stepping out of frame mid-episode
+     must not take the calming screen with them */
+  if($("#emergency") && $("#emergency").classList.contains("on")) return;
+  if(!currentPerson) return;
+  if(camOn && Date.now() - lastFaceAt < IDLE_RESET) return;
+  resetToBase(camOn ? "nobody seen for a minute" : "camera switched off");
+}, 5000);
+let waitedForFace = false;
+function fallBackToBase(){
+  if(waitedForFace) return;
+  waitedForFace = true;
+  if(currentPerson) return;                 // somebody turned up after all
+  if(phase !== "film" && phase !== "idle") return;
+  charPage = null;
+  setCharacterPage(null, "neutral");
+  $("#question").textContent = FILM_Q;
+  say(FILM_Q);
+  console.log("[slime] nobody recognised in " + (RECOGNISE_WINDOW / 1000) + "s — asking the film question");
+}
+
+setMode();
+if(restore()){
+  applyTheme(); paintProfile();
+  /* Once a character is chosen it IS the companion. Reloading the page must not
+     quietly drop it back to the gel — the person came back to the same Slime. */
+  if(!charPage){
+    const guess = pickCharacter(theme, (theme.film || "") + " " + (theme.character || ""));
+    if(guess) charPage = { file:guess.file, name:guess.name };
+  }
+  if(charPage) setCharacterPage(charPage.file, charPage.name);
+  else setCharacterPage(null, "neutral");
+  $("#question").textContent = phase === "format" ? FORMAT_Q : "";
+} else {
+  applyTheme(); paintProfile();
+  $("#question").textContent = "";
+  /* give the camera a moment to say who this is before falling back to asking */
+  setTimeout(fallBackToBase, RECOGNISE_WINDOW);
+  /* browsers block audio until the first gesture — speak on the first interaction */
+  const kick = () => {
+    if(!currentPerson && waitedForFace) say(FILM_Q);
+    ["click","keydown","touchstart"].forEach((e) => removeEventListener(e,kick));
+  };
+  ["click","keydown","touchstart"].forEach((e) => addEventListener(e,kick));
+}
+</script>
+<script src="vision.js"></script>
+<script src="people.js"></script>
+<script src="pictos.js"></script>
+<script src="voices.js"></script>
+<script src="lipsync.js"></script>
+<script src="scenes.js"></script>
+</body>
+</html>

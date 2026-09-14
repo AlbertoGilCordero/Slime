@@ -1,0 +1,210 @@
+{
+  "_note": "FICTIONAL. Invented for a product demo. Not real people, not real clinical documents.",
+  "_schema": {
+    "role": "supported | circle | clinician — supported means Slime accompanies them and a report is expected",
+    "communication.preferredFormat": "pictures | voice | text | story — this alone decides how answers arrive",
+    "regulation.calmAudio": "a file in audio/, played during a crisis. Chosen from the sensory profile, not at random",
+    "contacts[].role": "first contact is the one alerted; the rest are informational",
+    "communication.stepsPictures": "how many pictograms in one sequence. Higher than stepsSpoken on purpose: pictures stay on screen, so they are not a memory load"
+  },
+  "people": {
+    "Alberto": {
+      "role": "supported",
+      "relation": "warehouse team",
+      "report": {
+        "name": "Alberto Ruiz",
+        "reference": "SLM-2026-0148",
+        "reportDate": "2026-02-14",
+        "author": "Dr Lina Moreau",
+        "setting": "Workplace support — logistics team",
+        "summary": "Alberto is an autistic adult working full time in a warehouse team. He follows procedures accurately and holds detail well once it is learned. Difficulty is almost always with how instructions arrive, not with the task itself. Verbal instructions given at speed, in noisy areas, or bundled together are the main source of breakdown. When the same instruction is given visually and in small pieces, retention is excellent.",
+        "communication": {
+          "preferredFormat": "pictures",
+          "secondFormat": "text",
+          "detail": "short",
+          "pace": "slow",
+          "notes": [
+            "Three SPOKEN steps at a time is the ceiling. Picture sequences can run to six or seven, because they stay on screen and do not have to be held in mind.",
+            "One idea per sentence. Compound sentences reliably fail.",
+            "Concrete object names work; category words do not.",
+            "Idioms, sarcasm and rhetorical questions are taken literally.",
+            "Needs to be told when something is finished."
+          ],
+          "stepsSpoken": 3,
+          "stepsPictures": 6
+        },
+        "sensory": {
+          "stimulus": "low",
+          "notes": [
+            "Sustained background noise is the single largest disruptor.",
+            "Prefers muted colour and little on-screen movement.",
+            "Uses ear defenders on the floor."
+          ]
+        },
+        "learning": {
+          "worksWell": [
+            "Pictogram sequences for any physical task",
+            "Being told the number of steps before they start",
+            "Repetition of the same wording, unchanged"
+          ],
+          "doesNotWork": [
+            "Spoken-only instruction in a noisy area",
+            "Rephrasing the same step differently to be helpful",
+            "Being asked to summarise back under time pressure"
+          ]
+        },
+        "interests": [
+          "dragon ball",
+          "fixed routines",
+          "sorting systems"
+        ],
+        "regulation": {
+          "earlySigns": [
+            "Speech becomes shorter, then stops",
+            "Repeated adjusting of gloves or sleeves",
+            "Moves to the edge of the room"
+          ],
+          "helps": [
+            "Reduce noise first, before speaking",
+            "Lower light and stop screen movement",
+            "Familiar instrumental audio at low volume",
+            "Silence is fine. Do not fill it."
+          ],
+          "avoid": [
+            "Physical contact without asking",
+            "Multiple people speaking",
+            "Asking what is wrong while it is happening"
+          ],
+          "calmAudio": "audio/low-drone.mp3",
+          "calmAudioWhy": "Stimulus tolerance is low, so a single sustained tone with no melody and no rhythm. Anything with a beat adds load rather than removing it.",
+          "calmVolume": 0.22
+        },
+        "contacts": [
+          {
+            "name": "Anthony",
+            "relation": "colleague",
+            "role": "first contact"
+          },
+          {
+            "name": "Maël",
+            "relation": "manager",
+            "role": "informed after"
+          }
+        ],
+        "companion": {
+          "character": "goku",
+          "why": "Long-standing interest. Reduced refusal of new instructions in the first two weeks."
+        },
+        "review": "Six months, or sooner at Alberto's request."
+      }
+    },
+    "Dana": {
+      "role": "supported",
+      "relation": "warehouse team",
+      "report": {
+        "name": "Dana Ferreira",
+        "reference": "SLM-2026-0151",
+        "reportDate": "2026-02-21",
+        "author": "Dr Lina Moreau",
+        "setting": "Workplace support — logistics team",
+        "summary": "Dana is an autistic adult in the same team as Alberto, with a markedly different profile. She processes spoken language well and prefers it to written material, which she finds effortful to scan. She follows narrative structure easily and remembers instructions better when framed as a sequence with a beginning and an end. Written lists and dense screens are the main barrier.",
+        "communication": {
+          "preferredFormat": "voice",
+          "secondFormat": "story",
+          "detail": "short",
+          "pace": "normal",
+          "notes": [
+            "Spoken instruction lands well. Written lists are read slowly and re-read.",
+            "Responds strongly to sequence framing — first, then, last.",
+            "Asks clarifying questions readily. Treat as engagement, not confusion.",
+            "Prefers to be told the purpose before the steps."
+          ],
+          "stepsSpoken": 4,
+          "stepsPictures": 6
+        },
+        "sensory": {
+          "stimulus": "normal",
+          "notes": [
+            "Tolerates ordinary office noise and movement.",
+            "Bright flickering light is uncomfortable over long periods.",
+            "No difficulty with colour or animation."
+          ]
+        },
+        "learning": {
+          "worksWell": [
+            "Spoken instruction with a clear sequence",
+            "Framing a task as a short journey",
+            "Being told why before how"
+          ],
+          "doesNotWork": [
+            "Written checklists with more than a few items",
+            "Dense screens with several things competing",
+            "Being handed a document and left to it"
+          ]
+        },
+        "interests": [
+          "tintin",
+          "adventure stories",
+          "maps and routes"
+        ],
+        "regulation": {
+          "earlySigns": [
+            "Talks faster and louder",
+            "Repeats the same question in different words",
+            "Stands up and moves without a destination"
+          ],
+          "helps": [
+            "Speak slowly and stay in the room",
+            "Name what is happening next, out loud",
+            "Music with a steady predictable structure",
+            "Give her something with a clear end point"
+          ],
+          "avoid": [
+            "Leaving her alone to settle — it escalates",
+            "Handing her something written in that moment",
+            "Telling her to calm down"
+          ],
+          "calmAudio": "audio/soft-piano.mp3",
+          "calmAudioWhy": "Stimulus tolerance is normal and she settles on structure, so a slow piece with a clear repeating phrase gives her something to follow.",
+          "calmVolume": 0.35
+        },
+        "contacts": [
+          {
+            "name": "Maël",
+            "relation": "manager",
+            "role": "first contact"
+          },
+          {
+            "name": "Anthony",
+            "relation": "colleague",
+            "role": "secondary"
+          }
+        ],
+        "companion": {
+          "character": "tintin",
+          "why": "Chosen by Dana. The reporter framing suits how she likes tasks explained."
+        },
+        "review": "Six months, or sooner at Dana's request."
+      }
+    },
+    "Anthony": {
+      "role": "circle",
+      "relation": "colleague of Alberto",
+      "telegram": "",
+      "phone": ""
+    },
+    "Maël": {
+      "role": "circle",
+      "relation": "manager",
+      "canRequest": true,
+      "telegram": "",
+      "phone": ""
+    },
+    "Lina": {
+      "role": "clinician",
+      "relation": "doctor",
+      "canRequest": true,
+      "authorised": true
+    }
+  }
+}

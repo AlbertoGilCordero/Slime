@@ -1,0 +1,807 @@
+{
+  "name": "Slime — brain",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slime",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        300
+      ],
+      "webhookId": "slime-main"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "theme",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "theme"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "reply",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reply"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "learn",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "learn"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "picto",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "picto"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "speak",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "speak"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "portrait",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "portrait"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "alert",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "alert"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "router",
+      "name": "Route by action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'deepseek-chat', response_format: { type: 'json_object' }, max_tokens: 1200, messages: [ { role: 'system', content: $json.body.system }, { role: 'user', content: $json.body.user } ] }) }}",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ds-theme",
+      "name": "DeepSeek · theme",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        60
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "DeepSeek key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'deepseek-chat', response_format: { type: 'json_object' }, max_tokens: 1200, messages: [ { role: 'system', content: $json.body.system }, { role: 'user', content: $json.body.user } ] }) }}",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ds-reply",
+      "name": "DeepSeek · reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        220
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "DeepSeek key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'deepseek-chat', response_format: { type: 'json_object' }, max_tokens: 1200, messages: [ { role: 'system', content: $json.body.system }, { role: 'user', content: $json.body.user } ] }) }}",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ds-learn",
+      "name": "DeepSeek · learn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        380
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "DeepSeek key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// DeepSeek returns OpenAI-shaped JSON. Pull the payload out and hand back clean data.\nconst out = [];\nfor (const item of $input.all()) {\n  const raw = item.json?.choices?.[0]?.message?.content ?? '{}';\n  let parsed;\n  try {\n    parsed = JSON.parse(raw);\n  } catch (e) {\n    const s = raw.indexOf('{'), t = raw.lastIndexOf('}');\n    parsed = s >= 0 ? JSON.parse(raw.slice(s, t + 1)) : { error: 'unparseable' };\n  }\n  out.push({ json: parsed });\n}\nreturn out;"
+      },
+      "id": "parse",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [ { parts: [ { text: 'A single flat vector pictogram on a plain dark background. Subject: ' + $json.body.label + '. One clear object, thick even strokes, no text, no letters, no numbers, no shading, no background detail, high contrast, centred, symmetrical, instantly readable at small size. Line colour ' + ($json.body.tint || '#8AE6D2') + '. Style: accessible communication symbol, in the tradition of ARASAAC pictograms. Generic everyday object only. Do not depict any existing character, mascot, franchise or trademarked figure.' } ] } ] }) }}",
+        "options": {
+          "timeout": 90000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "nano",
+      "name": "Nano Banana · pictogram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        540
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Gemini key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gemini returns the image as inline base64. Hand back a data URL the browser can use directly.\nconst out = [];\nfor (const item of $input.all()) {\n  const parts = item.json?.candidates?.[0]?.content?.parts || [];\n  const img = parts.find(p => p.inlineData || p.inline_data);\n  const data = img?.inlineData?.data || img?.inline_data?.data;\n  const mime = img?.inlineData?.mimeType || img?.inline_data?.mime_type || 'image/png';\n  out.push({ json: data ? { image: `data:${mime};base64,${data}` } : { error: 'no image returned' } });\n}\nreturn out;"
+      },
+      "id": "parse-img",
+      "name": "Parse image",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.elevenlabs.io/v1/text-to-speech/{{ $json.body.voiceId || 'JBFqnCBsd6RMkjVDRZzb' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "audio/mpeg"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.body.text, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.45, similarity_boost: 0.7, style: 0.35 } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 60000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "eleven",
+      "name": "ElevenLabs · voice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        700
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "ElevenLabs key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turn the mp3 binary into a data URL so the browser can play it with no extra request.\nconst out = [];\nfor (const item of $input.all()) {\n  const key = Object.keys(item.binary || {})[0];\n  if (!key) { out.push({ json: { error: 'no audio returned' } }); continue; }\n  const b = item.binary[key];\n  out.push({ json: { audio: `data:audio/mpeg;base64,${b.data}` } });\n}\nreturn out;"
+      },
+      "id": "parse-audio",
+      "name": "Parse audio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "content-type"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [ { parts: [ { text: $json.prompt } ] } ] }) }}",
+        "options": {
+          "timeout": 90000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "nano-face",
+      "name": "Nano Banana · portrait",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        860
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Gemini key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model:'deepseek-chat', response_format:{type:'json_object'}, max_tokens:600, messages:[ {role:'system', content:\"You turn a character someone loves into an ORIGINAL creature design with real personality.\\\\n\\\\nYou get a CHARACTER and the WORK they come from. You never reproduce them. You write a brief for an original gel-blob companion called Slime that hits the same archetype hard enough to feel right.\\\\n\\\\nBE BOLD. A vague description produces a featureless blob and fails. Commit to strong, specific, drawable choices: an enormous drooping moustache, a helmet with two broad wings, huge round goggles, a mane of shaggy fur. Name the shapes and the colours.\\\\n\\\\nKEEP: dominant colours, mood, broad archetype, and two or three GENERIC trait categories (moustache, winged head-piece, goggles, long ears, mane, crown, visor).\\\\nCHANGE: exact proportions, patterns, insignia, costume details, hairstyle specifics, and anything that acts as a signature of the original design. Use different shape language and different arrangement.\\\\nNEVER output the character's name, the work, the studio, the author, a nickname, a catchphrase or a motto. Never write 'in the style of'. Never reference an existing franchise.\\\\n\\\\nRespond with ONLY this JSON:\\\\n{\\\"traits\\\":\\\"three sentences. Sentence 1: body colour, translucency, head shape. Sentence 2: the eyes - shape, size, colour, and the eyebrows. Sentence 3: the two or three bold features it wears, described as shapes an illustrator can draw. Concrete and vivid. No names.\\\",\\n \\\"headwear\\\":\\\"the head-piece as a simple shape description, or the word none\\\"}\"}, {role:'user', content:'CHARACTER: ' + ($json.body.character || 'unknown') + '\\nWORK: ' + ($json.body.film || 'unknown')} ] }) }}",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "abstract",
+      "name": "DeepSeek · abstract traits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        860
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "DeepSeek key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json?.choices?.[0]?.message?.content ?? '{}';\nlet brief;\ntry { brief = JSON.parse(raw); } catch (e) {\n  const s = raw.indexOf('{'), t = raw.lastIndexOf('}');\n  brief = s >= 0 ? JSON.parse(raw.slice(s, t + 1)) : {};\n}\nconst traits = brief.traits || 'A round translucent gel creature with huge friendly eyes and thick dark eyebrows.';\nconst hat = (brief.headwear && brief.headwear.toLowerCase() !== 'none')\n  ? ' It wears ' + brief.headwear + ', drawn as part of the same picture.' : '';\nconst prompt = 'Original character design. A single cartoon HEAD, front facing, perfectly centred, '\n  + 'FILLING THE ENTIRE FRAME edge to edge with no margin and no empty space around it. '\n  + traits + hat + ' '\n  + 'Style: bold flat cartoon, thick confident outlines, large expressive features, strong saturated colours, '\n  + 'high contrast, clearly readable at small size. Glossy jelly finish with one soft highlight. '\n  + 'Background: pure solid black, absolutely nothing else on it. '\n  + 'No neck, no shoulders, no body, no text, no logo, no border, no drop shadow. '\n  + 'Original design only. Do not depict any existing character, mascot, franchise or trademarked figure.';\nreturn [{ json: { prompt, traits, headwear: brief.headwear || 'none' } }];"
+      },
+      "id": "build-prompt",
+      "name": "Build safe image prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One place where the alert wording lives. Keep it a PROMPT TO CHECK, never a claim.\n// This heuristic sees a movement pattern. It does not know what happened, and the\n// message must not pretend otherwise.\nconst b = $input.first().json.body || {};\nconst who  = b.person ? b.person : 'the person Slime is with';\nconst when = b.at ? new Date(b.at).toLocaleString() : new Date().toLocaleString();\nconst text = [\n  'Slime noticed something worth checking.',\n  '',\n  'Who: ' + who,\n  'When: ' + when,\n  'What was seen: ' + (b.contacts || '?') + ' fast hand-to-head movements in about '\n    + (b.seconds || '?') + ' seconds.',\n  '',\n  'This is a movement pattern picked up by a camera, not a diagnosis. It has ordinary',\n  'explanations too. Please check in when you can.'\n].join('\\n');\nreturn [{ json: { text, chatId: b.chatId || '', person: who, at: when } }];"
+      },
+      "id": "compose-alert",
+      "name": "Compose alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "telegram",
+      "name": "Telegram · notify family",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        300,
+        1040
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { sent: true, at: new Date().toISOString() } }];"
+      },
+      "id": "alert-ack",
+      "name": "Alert sent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        1040
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route by action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by action": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek · theme",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "DeepSeek · reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "DeepSeek · learn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nano Banana · pictogram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ElevenLabs · voice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "DeepSeek · abstract traits",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compose alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek · theme": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek · reply": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek · learn": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nano Banana · pictogram": {
+      "main": [
+        [
+          {
+            "node": "Parse image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse image": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs · voice": {
+      "main": [
+        [
+          {
+            "node": "Parse audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse audio": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nano Banana · portrait": {
+      "main": [
+        [
+          {
+            "node": "Parse image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek · abstract traits": {
+      "main": [
+        [
+          {
+            "node": "Build safe image prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build safe image prompt": {
+      "main": [
+        [
+          {
+            "node": "Nano Banana · portrait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose alert": {
+      "main": [
+        [
+          {
+            "node": "Telegram · notify family",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram · notify family": {
+      "main": [
+        [
+          {
+            "node": "Alert sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert sent": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "slime",
+    "notes": "SETUP — 1. Import into n8n (Workflows > Import from File). 2. Create three Header Auth credentials (Credentials > New > Header Auth): 'DeepSeek key' with Name=Authorization Value=Bearer sk-...; 'Gemini key' with Name=x-goog-api-key Value=AIza...; 'ElevenLabs key' with Name=xi-api-key Value=sk_... (optional). 3. Open each HTTP node and pick its credential from the dropdown. 4. Activate the workflow and copy the PRODUCTION webhook URL. 5. Open demo.html?hook=<that url>. Frontend sends { action, system, user } for theme/reply/learn, { action:'picto', label, tint }, { action:'speak', text, voiceId }, and { action:'portrait', character, film }. The portrait route runs DeepSeek first to abstract the character into an ORIGINAL gel-creature brief — no names, no franchise references — and only that brief reaches the image model. ALERT ROUTE: { action:'alert', person, contacts, seconds, at, chatId } -> Compose alert -> Telegram. Swap the Telegram node for Gmail, Slack or Twilio if you prefer; only the Compose node writes the wording. That wording is deliberate: the flag reports a movement pattern and asks someone to check. It must never claim to know what happened."
+  }
+}

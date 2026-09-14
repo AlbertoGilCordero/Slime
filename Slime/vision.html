@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════════
+  SLIME — vision.html
+  Enrol the household and watch the camera layer work, on its own.
+  ════════════════════════════════════════════════════════════════════
+  Open this BEFORE the demo. Enrol each person once; the descriptors are
+  saved in this browser and demo.html reads the same store.
+
+  Needs https:// or localhost — browsers refuse the camera on file://.
+  ════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Slime — camera setup</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/human/dist/human.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--t:#8AE6D2;--a:#F2B233;--bg:#040607;--f:'Manrope',sans-serif}
+html,body{min-height:100%;background:var(--bg);color:#F2F5F4;font-family:var(--f);-webkit-font-smoothing:antialiased}
+body{display:flex;justify-content:center;padding:28px 20px 60px}
+.wrap{width:100%;max-width:760px;display:flex;flex-direction:column;gap:20px}
+h1{font-size:30px;font-weight:800;letter-spacing:-.02em}
+.lede{font-size:17px;line-height:1.55;color:#8E9C9A;max-width:62ch}
+.privacy{font-size:15px;line-height:1.6;color:#A9B6B4;border-left:2px solid var(--t);padding:2px 0 2px 16px}
+
+.stage{position:relative;border-radius:16px;overflow:hidden;background:#0A0F10;border:1px solid rgba(255,255,255,.1)}
+video{width:100%;display:block;transform:scaleX(-1)}
+.status{position:absolute;left:14px;bottom:14px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;
+  background:rgba(0,0,0,.6);padding:6px 12px;border-radius:100px;color:var(--t)}
+.badge{position:absolute;right:14px;top:14px;font-size:15px;padding:7px 15px;border-radius:100px;
+  background:rgba(0,0,0,.6);color:#8E9C9A}
+.badge.known{color:var(--t)}
+
+.row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+input,button,select{font-family:var(--f);font-size:16px}
+select{color:#F2F5F4;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);
+  border-radius:12px;padding:11px 14px;cursor:pointer}
+select:focus{outline:none;border-color:var(--t)}
+.person .role{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--t);
+  border:1px solid rgba(138,230,210,.35);border-radius:100px;padding:3px 10px}
+input{flex:1;min-width:140px;color:#F2F5F4;background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:11px 14px}
+input:focus{outline:none;border-color:var(--t)}
+button{padding:11px 20px;border-radius:100px;border:1px solid rgba(255,255,255,.18);
+  background:transparent;color:#F2F5F4;cursor:pointer;transition:all .25s}
+button:hover{border-color:var(--t);color:var(--t)}
+button.primary{background:var(--t);color:#06201F;border-color:var(--t)}
+button.primary:hover{opacity:.88;color:#06201F}
+
+h2{font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:#7C8A89;font-weight:700}
+.person{display:flex;align-items:center;gap:14px;padding:13px 16px;border:1px solid rgba(255,255,255,.1);
+  border-radius:12px}
+.person .n{font-size:18px;font-weight:600}
+.person .r{font-size:15px;color:#8E9C9A}
+.person button{margin-left:auto;padding:6px 14px;font-size:14px;color:#8E9C9A}
+.person .edit{margin-left:0}
+
+#passportWrap{border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:22px}
+#pp h3{font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:var(--t);
+  font-weight:700;margin:26px 0 10px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1)}
+#pp h3:first-of-type{border-top:0;padding-top:0;margin-top:6px}
+#pp h4{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#7C8A89;
+  font-weight:600;margin:18px 0 8px}
+#pp label{display:flex;flex-direction:column;gap:5px;font-size:14px;color:#8E9C9A;margin-bottom:11px}
+#pp input,#pp select,#pp textarea{font-family:var(--f);font-size:16px;color:#F2F5F4;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);
+  border-radius:10px;padding:10px 13px;width:100%;resize:vertical}
+#pp input:focus,#pp select:focus,#pp textarea:focus{outline:none;border-color:var(--t)}
+#pp .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:0 12px}
+#pp .machine{border:1px dashed rgba(138,230,210,.3);border-radius:12px;padding:14px 14px 4px;margin:6px 0 14px;position:relative}
+#pp .machine .tag{position:absolute;top:-9px;left:12px;background:var(--bg);padding:0 8px;
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--t)}
+#pp .add{padding:8px 15px;font-size:14px;border-radius:10px;color:var(--t);
+  border-color:color-mix(in srgb,var(--t) 40%,transparent);margin-bottom:6px}
+#pp .sub{border-left:2px solid rgba(255,255,255,.12);padding-left:14px;margin-bottom:12px;position:relative}
+#pp .sub .rm{position:absolute;right:0;top:0;padding:3px 10px;font-size:13px;color:#8E9C9A}
+.file{position:relative;overflow:hidden;display:inline-flex;align-items:center;
+  padding:11px 20px;border-radius:100px;border:1px dashed color-mix(in srgb,var(--t) 45%,transparent);
+  color:var(--t);cursor:pointer;font-size:16px;transition:all .2s}
+.file:hover{background:rgba(138,230,210,.08)}
+.file input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+#pp .hist{font-size:14px;color:#7C8A89;line-height:1.6;margin-top:6px}
+@media(max-width:700px){#pp .g3{grid-template-columns:1fr}}
+.empty{font-size:16px;color:#5A6968}
+
+.log{display:flex;flex-direction:column;gap:9px}
+.flag{font-size:16px;line-height:1.5;color:var(--a);border-left:2px solid var(--a);padding:8px 0 8px 14px}
+.flag time{display:block;font-size:13px;color:#7C8A89;margin-top:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>Camera setup</h1>
+    <p class="lede">Enrol each person once so Slime knows who it is talking to. Mark each person: someone Slime accompanies, someone in their circle, or a clinician. That distinction is what lets Slime speak <em>to</em> one person and <em>about</em> them to the others.</p>
+  </div>
+
+  <p class="privacy">Frames never leave this device. Only a list of 128 numbers per person is saved, in this browser. No photos are stored and nothing is uploaded. Ask each person before you enrol them, and use <strong>Forget</strong> to remove anyone at any time.</p>
+
+  <div class="stage">
+    <video id="v" playsinline muted></video>
+    <div class="badge" id="badge">no one recognised</div>
+    <div class="status" id="status">stopped</div>
+  </div>
+
+  <div class="row">
+    <button class="primary" id="startBtn">Start camera</button>
+    <button id="stopBtn">Stop</button>
+    <button id="exportAll">Export everything</button>
+    <label class="file">
+      <input type="file" id="importAll" accept=".json"/>
+      <span>Import everything</span>
+    </label>
+    <span class="empty" id="dataMsg"></span>
+  </div>
+
+  <div>
+    <h2 style="margin-bottom:10px">Enrol whoever is on camera</h2>
+    <div class="row">
+      <input id="name" placeholder="Name"/>
+      <input id="relation" placeholder="Relation — brother, carer, mother"/>
+      <select id="role">
+        <option value="supported">Slime accompanies this person</option>
+        <option value="circle">Family, colleague or carer</option>
+        <option value="clinician">Clinician</option>
+      </select>
+      <button class="primary" id="enrolBtn">Enrol</button>
+    </div>
+    <div class="row" style="margin-top:10px;align-items:center">
+      <label class="file">
+        <input type="file" id="ppFile" accept=".docx,.json,.txt"/>
+        <span>Import a support profile (.docx or .json)</span>
+      </label>
+      <span class="empty" id="ppFileMsg"></span>
+    </div>
+  </div>
+
+  <div>
+    <h2 style="margin-bottom:10px">Enrolled</h2>
+    <div class="log" id="list"></div>
+    <p class="empty" id="reportWarn" style="margin-top:10px;color:#F2B233;display:none"></p>
+  </div>
+
+
+  <div id="passportWrap" style="display:none">
+    <h2 style="margin-bottom:6px">Support profile — <span id="ppFor"></span></h2>
+    <p class="lede" style="margin-bottom:14px">Written for the people around them, not for the software.
+      Slime reads a handful of these fields; the rest exists so anyone stepping in knows what to do.
+      Everything stays in this browser and is never uploaded.</p>
+
+    <form id="pp" onsubmit="return false">
+
+      <h3>Who am I?</h3>
+      <div class="g3">
+        <label>Name<input name="who.name"/></label>
+        <label>Surname<input name="who.surname"/></label>
+        <label>Preferred name<input name="who.preferredName"/></label>
+      </div>
+      <div class="g3">
+        <label>Age<input name="who.age"/></label>
+        <label>Date of birth<input name="who.dob" placeholder="dd/mm/yyyy"/></label>
+        <label>Special interest — sets the companion<input name="who.specialInterest" placeholder="Dragon Ball, trains, Tintin"/></label>
+      </div>
+      <label>I like<input name="who.likes" placeholder="chocolate, bread, ice tea"/></label>
+      <label>I dislike<input name="who.dislikes" placeholder="coffee, tomato, horror movies"/></label>
+      <label>IQ value (optional — Slime does not use it)<input name="who.iq"/></label>
+      <label>Skills / autonomy<textarea name="who.skills" rows="2" placeholder="I can make my bed, go to the toilet, eat by myself"></textarea></label>
+      <label>Habits / routine<textarea name="who.routine" rows="2" placeholder="Watches TV every day from 5pm to 6pm"></textarea></label>
+      <label>Things that make me comfortable<input name="who.comfortable" placeholder="looking at the sea, counting my fingers"/></label>
+      <label>Things that make me uncomfortable<input name="who.uncomfortable" placeholder="crowds, dogs"/></label>
+
+      <h4>Emergency contacts</h4>
+      <div id="contacts"></div>
+      <button type="button" class="add" id="addContact">+ Add emergency contact</button>
+
+      <h3>My communication</h3>
+      <label>How do I express myself<input name="communication.expressMyself" placeholder="pictograms, sign"/></label>
+      <label>What do I use most often<input name="communication.mostOften" placeholder="pictograms"/></label>
+      <label>Are there situations where my communication changes<input name="communication.changes"/></label>
+      <label>How you should communicate with me<input name="communication.howToCommunicate" placeholder="easy-read, pictograms"/></label>
+      <label>What could help me understand<input name="communication.whatHelps" placeholder="very simple sentences"/></label>
+      <div class="machine">
+        <span class="tag">Slime reads these</span>
+        <div class="g3">
+          <label>Format Slime uses
+            <select name="communication.machineFormat">
+              <option value="">from the answers above</option>
+              <option value="pictures">pictures</option>
+              <option value="voice">voice</option>
+              <option value="text">text</option>
+              <option value="story">story</option>
+            </select></label>
+          <label>Spoken steps at once<input name="communication.stepsSpoken" type="number" min="1" max="9" value="3"/></label>
+          <label>Pictures at once<input name="communication.stepsPictures" type="number" min="1" max="9" value="6"/></label>
+        </div>
+      </div>
+
+      <h3>When something goes wrong</h3>
+      <label>What can stress me<input name="whenWrong.stressors" placeholder="crowds, loud noises"/></label>
+      <label>How could you see I am becoming stressed<textarea name="whenWrong.signs" rows="2" placeholder="I cover my ears, I withdraw into myself"></textarea></label>
+      <label>How can you help me calm down<textarea name="whenWrong.calmMe" rows="2" placeholder="give headphones and play classical music"></textarea></label>
+      <div class="machine">
+        <span class="tag">Slime reads these</span>
+        <div class="g3">
+          <label>Audio to play<input name="whenWrong.calmAudio" placeholder="audio/classical.mp3"/></label>
+          <label>Volume<input name="whenWrong.calmVolume" type="number" step="0.05" min="0" max="1" value="0.3"/></label>
+          <label>Stimulus tolerance
+            <select name="whenWrong.stimulus"><option value="low">low</option><option value="normal">normal</option></select></label>
+        </div>
+      </div>
+
+      <h3>Medical safety</h3>
+      <label>Medical condition<input name="medical.condition" placeholder="ASD + ID"/></label>
+      <div class="g3">
+        <label>Epilepsy<select name="medical.epilepsy"><option value="">No</option><option value="yes">Yes</option></select></label>
+        <label>Type of seizure<input name="medical.seizureType" placeholder="focal seizure"/></label>
+        <label>Usual duration<input name="medical.seizureDuration" placeholder="45 seconds"/></label>
+      </div>
+      <label>What you should do<textarea name="medical.do" rows="2" placeholder="just check I am alright"></textarea></label>
+      <label>What you should not do<textarea name="medical.doNot" rows="2" placeholder="touching me"></textarea></label>
+      <label>Allergy<input name="medical.allergy" placeholder="none"/></label>
+
+      <h4>Medication</h4>
+      <div id="meds"></div>
+      <button type="button" class="add" id="addMed">+ Add a treatment</button>
+
+      <h3>Last update</h3>
+      <div class="g3">
+        <label>Date<input name="lastUpdate.date" placeholder="dd/mm/yyyy"/></label>
+        <label>Who made the update<input name="lastUpdate.by" placeholder="Dr ..."/></label>
+        <label>Which professional contributed<input name="lastUpdate.organisation"/></label>
+      </div>
+      <label>What changed<input name="lastUpdate.what" placeholder="medical section modified"/></label>
+      <div id="history" class="hist"></div>
+
+      <div class="row" style="margin-top:20px">
+        <button type="button" class="primary" id="ppSave">Save profile</button>
+        <button type="button" id="ppExport">Export for people.json</button>
+        <button type="button" id="ppClose">Close</button>
+      </div>
+      <p class="empty" id="ppMsg" style="margin-top:8px"></p>
+    </form>
+  </div>
+
+  <div>
+    <h2 style="margin-bottom:10px">Flags raised in this session</h2>
+    <div class="log" id="flags"><p class="empty">None yet. Wave a hand quickly beside your head a few times to test it.</p></div>
+  </div>
+</div>
+
+<script src="people.js"></script>
+<script src="vision.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+
+const badge = $("#badge"), status = $("#status");
+
+function paintList(){
+  const people = SlimeVision.people();
+  const box = $("#list");
+  box.innerHTML = "";
+  if(!people.length){ box.innerHTML = '<p class="empty">Nobody yet.</p>'; return; }
+  people.forEach((p) => {
+    const row = document.createElement("div");
+    row.className = "person";
+    row.innerHTML = '<span class="n"></span><span class="r"></span><span class="role"></span><button>Forget</button>';
+    row.querySelector(".n").textContent = p.name;
+    row.querySelector(".r").textContent = p.relation || "";
+    const badge = row.querySelector(".role");
+    if(p.role === "supported"){
+      const hasReport = window.SlimePeople && SlimePeople.report(p.name);
+      badge.textContent = hasReport ? "accompanies · report on file" : "accompanies · NO REPORT";
+      if(!hasReport) badge.style.color = "#F2B233";
+    }
+    else if(p.role === "clinician") badge.textContent = "clinician";
+    else badge.remove();
+    if(p.role === "supported"){
+      const has = window.SlimePeople && SlimePeople.report(p.name);
+      const edit = document.createElement("button");
+      edit.className = "edit";
+      if(!has) edit.style.color = "#F2B233";
+      edit.textContent = has ? "Edit profile" : "Add profile";
+      edit.onclick = () => openPassport(p.name);
+      row.insertBefore(edit, row.querySelector("button"));
+    }
+    row.querySelector("button:last-child").onclick = () => { SlimeVision.forget(p.name); paintList(); };
+    box.appendChild(row);
+  });
+}
+
+$("#startBtn").onclick = () => SlimeVision.start({
+  video: $("#v"),
+  onStatus: (s) => status.textContent = s,
+  onPerson: (who) => {
+    badge.textContent = who.name
+      ? who.name + (who.relation ? " · " + who.relation : "") + (who.role && who.role !== "circle" ? " · " + who.role : "")
+      : "no one recognised";
+    badge.classList.toggle("known", !!who.name);
+  },
+  onFlag: (f) => {
+    const box = $("#flags");
+    if(box.querySelector(".empty")) box.innerHTML = "";
+    const el = document.createElement("p");
+    el.className = "flag";
+    el.innerHTML = "<span></span><time></time>";
+    el.querySelector("span").textContent = f.message + (f.person ? " (" + f.person + ")" : "");
+    el.querySelector("time").textContent = new Date(f.at).toLocaleTimeString() + " · " + f.contacts + " movements in " + f.seconds + "s";
+    box.prepend(el);
+  },
+});
+
+$("#stopBtn").onclick = () => SlimeVision.stop();
+
+$("#enrolBtn").onclick = async () => {
+  const name = $("#name").value.trim();
+  if(!name) return;
+  const r = await SlimeVision.enroll(name, $("#relation").value.trim(), $("#role").value);
+  status.textContent = r.ok ? "enrolled " + r.name : "could not enrol: " + r.error;
+  if(r.ok){
+    const who = $("#name").value.trim(), role = $("#role").value;
+    $("#name").value = ""; $("#relation").value = ""; paintList();
+    /* a profile is the point of enrolling someone Slime accompanies, so ask now */
+    if(role === "supported") openPassport(who);
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   THE SUPPORT PROFILE
+   Only offered for people Slime accompanies. Saved in this browser,
+   merged over people.json, and exportable so it can be made permanent.
+   ══════════════════════════════════════════════════════════════ */
+let ppName = null;
+
+const dget = (o, path) => path.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
+function dset(o, path, v){
+  const ks = path.split(".");
+  ks.slice(0, -1).forEach((k) => { if(!o[k]) o[k] = {}; o = o[k]; });
+  o[ks[ks.length - 1]] = v;
+}
+
+function contactRow(c){
+  const d = document.createElement("div");
+  d.className = "sub";
+  d.innerHTML = '<button type="button" class="rm">Remove</button>'
+    + '<div class="g3"><label>Name<input data-c="name"/></label>'
+    + '<label>Relation<input data-c="relation" placeholder="brother, carer"/></label>'
+    + '<label>Phone<input data-c="phone"/></label></div>';
+  if(c) d.querySelectorAll("[data-c]").forEach((i) => { i.value = c[i.dataset.c] || ""; });
+  d.querySelector(".rm").onclick = () => d.remove();
+  document.getElementById("contacts").appendChild(d);
+}
+
+function medRow(m){
+  const d = document.createElement("div");
+  d.className = "sub";
+  d.innerHTML = '<button type="button" class="rm">Remove</button>'
+    + '<div class="g3"><label>Name<input data-m="name" placeholder="Levetiracetam"/></label>'
+    + '<label>Dose<input data-m="dose" placeholder="500mg"/></label>'
+    + '<label>Frequency<input data-m="frequency" placeholder="twice a day"/></label></div>'
+    + '<label>Why<input data-m="why" placeholder="epilepsy"/></label>'
+    + '<label>Important precautions<input data-m="precautions" placeholder="monitor for drowsiness"/></label>';
+  if(m) d.querySelectorAll("[data-m]").forEach((i) => { i.value = m[i.dataset.m] || ""; });
+  d.querySelector(".rm").onclick = () => d.remove();
+  document.getElementById("meds").appendChild(d);
+}
+
+function openPassport(name){
+  ppName = name;
+  $("#ppFor").textContent = name;
+  $("#passportWrap").style.display = "block";
+  $("#ppMsg").textContent = "";
+  $("#contacts").innerHTML = ""; $("#meds").innerHTML = "";
+
+  const pp = (window.SlimePeople && SlimePeople.passport(name)) || {};
+  $("#pp").querySelectorAll("[name]").forEach((el) => {
+    const v = dget(pp, el.name);
+    el.value = v == null ? (el.getAttribute("value") || "") : (typeof v === "boolean" ? (v ? "yes" : "") : v);
+  });
+  if(!dget(pp, "who.name")) $("#pp").querySelector('[name="who.name"]').value = name;
+
+  const cs = dget(pp, "who.emergency") || [];
+  cs.length ? cs.forEach(contactRow) : contactRow();
+  const ms = dget(pp, "medical.medication") || [];
+  ms.length ? ms.forEach(medRow) : medRow();
+
+  const hist = dget(pp, "lastUpdate.history") || [];
+  $("#history").textContent = hist.length ? "History: " + hist.join("  ·  ") : "";
+  $("#passportWrap").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+function collectPassport(){
+  const pp = {};
+  $("#pp").querySelectorAll("[name]").forEach((el) => {
+    let v = el.value.trim();
+    if(el.type === "number") v = v === "" ? "" : Number(v);
+    if(el.name === "medical.epilepsy") v = (v === "yes");
+    if(v !== "") dset(pp, el.name, v);
+  });
+  const contacts = [];
+  $("#contacts").querySelectorAll(".sub").forEach((d) => {
+    const c = {}; d.querySelectorAll("[data-c]").forEach((i) => { if(i.value.trim()) c[i.dataset.c] = i.value.trim(); });
+    if(Object.keys(c).length) contacts.push(c);
+  });
+  if(contacts.length) dset(pp, "who.emergency", contacts);
+
+  const meds = [];
+  $("#meds").querySelectorAll(".sub").forEach((d) => {
+    const m = {}; d.querySelectorAll("[data-m]").forEach((i) => { if(i.value.trim()) m[i.dataset.m] = i.value.trim(); });
+    if(Object.keys(m).length) meds.push(m);
+  });
+  if(meds.length) dset(pp, "medical.medication", meds);
+
+  /* every save is a version — a support profile with no trail is not trustworthy */
+  const prev = (window.SlimePeople && SlimePeople.passport(ppName)) || {};
+  const hist = (dget(prev, "lastUpdate.history") || []).slice(0, 9);
+  const stamp = (dget(pp, "lastUpdate.date") || new Date().toLocaleDateString())
+    + " – " + (dget(pp, "lastUpdate.what") || "profile updated")
+    + (dget(pp, "lastUpdate.by") ? " (" + dget(pp, "lastUpdate.by") + ")" : "");
+  dset(pp, "lastUpdate.history", [stamp].concat(hist));
+  return pp;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ONE FILE WITH EVERYTHING
+   Faces and profiles both live in this browser, under this exact origin.
+   localhost:8000 and 127.0.0.1:8000 look identical and are not: enrol on
+   one and the other sees nothing. Rather than hunt that down every time,
+   the whole device's data moves as a single file.
+   ══════════════════════════════════════════════════════════════ */
+$("#exportAll").onclick = () => {
+  const data = {
+    slime: "device-data", version: 1, exported: new Date().toISOString(),
+    faces: SlimeVision.exportFaces(),
+    profiles: JSON.parse(localStorage.getItem("slime.passports") || "{}"),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "slime-data.json";
+  a.click();
+  $("#dataMsg").style.color = "#8AE6D2";
+  $("#dataMsg").textContent = "Exported " + data.faces.length + " face(s) and "
+    + Object.keys(data.profiles).length + " profile(s).";
+};
+
+$("#importAll").onchange = async (e) => {
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  try{
+    const data = JSON.parse(await f.text());
+    const faces = SlimeVision.importFaces(data.faces || []);
+    const profs = data.profiles || {};
+    const cur = JSON.parse(localStorage.getItem("slime.passports") || "{}");
+    Object.keys(profs).forEach((k) => { cur[k] = profs[k]; });
+    localStorage.setItem("slime.passports", JSON.stringify(cur));
+    if(window.SlimePeople) await SlimePeople.load();
+    paintList();
+    $("#dataMsg").style.color = "#8AE6D2";
+    $("#dataMsg").textContent = "Imported. " + faces + " face(s), "
+      + Object.keys(cur).length + " profile(s) on this device now.";
+  }catch(err){
+    $("#dataMsg").style.color = "#F2B233";
+    $("#dataMsg").textContent = "Could not read that file: " + (err.message || err);
+  }finally{ e.target.value = ""; }
+};
+
+$("#addContact").onclick = () => contactRow();
+$("#addMed").onclick = () => medRow();
+$("#ppClose").onclick = () => { $("#passportWrap").style.display = "none"; ppName = null; };
+
+$("#ppSave").onclick = () => {
+  if(!ppName) return;
+  const ok = SlimePeople.savePassport(ppName, collectPassport());
+  const fmt = SlimePeople.format(ppName);
+  $("#ppMsg").style.color = ok ? "#8AE6D2" : "#F2B233";
+  const check = SlimePeople.report(ppName);
+  $("#ppMsg").textContent = (ok && check)
+    ? "Saved for \"" + ppName + "\". Slime will use " + fmt + "."
+      + " Enrol that exact name on camera, or the demo will not find it."
+    : "Could not save — the browser refused local storage.";
+  console.log("[slime] saved profile for", ppName, "| profiles on this device:", SlimePeople.all().join(", "));
+  paintList();
+};
+
+$("#ppExport").onclick = () => {
+  if(ppName) SlimePeople.savePassport(ppName, collectPassport());
+  const blob = new Blob([SlimePeople.exportAll()], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "people.json";
+  a.click();
+  $("#ppMsg").style.color = "#8AE6D2";
+  $("#ppMsg").textContent = "Downloaded. Replace people.json in the folder to make these permanent.";
+};
+
+
+/* ══════════════════════════════════════════════════════════════
+   IMPORTING A SUPPORT PROFILE DOCUMENT
+   These profiles already exist on paper — nobody should retype one into
+   a browser. Read the .docx, pull the labelled fields out, and fill the
+   form so a person still reviews it before it becomes live.
+
+   The parser is label-driven and section-aware. "Name :" appears twice in
+   the document — once for the person, once inside a treatment — so the
+   current heading decides which one it is.
+   ══════════════════════════════════════════════════════════════ */
+const SECTION_OF = [
+  [/who\s*am\s*i/i,                    "who"],
+  [/my\s*communication/i,              "communication"],
+  [/something\s*goes\s*wrong/i,        "whenWrong"],
+  [/medical\s*safety/i,                "medical"],
+  [/last\s*update/i,                   "lastUpdate"],
+];
+
+/* label → where it lands. Order matters: longer labels first. */
+const FIELDS = {
+  who: [
+    [/^pref+er+ed\s*name$/i,                     "who.preferredName"],
+    [/^name\s*\/\s*surname$/i,                   "__contactName"],
+    [/^phone\s*number$/i,                        "__contactPhone"],
+    [/^surname$/i,                               "who.surname"],
+    [/^name$/i,                                  "who.name"],
+    [/^age$/i,                                   "who.age"],
+    [/^date\s*of\s*birth$/i,                     "who.dob"],
+    [/^special\s*interest/i,                     "who.specialInterest"],
+    [/^i\s*like$/i,                              "who.likes"],
+    [/^i\s*dislike$/i,                           "who.dislikes"],
+    [/^iq\s*value$/i,                            "who.iq"],
+    [/^skills?\s*\/?\s*autonomy$/i,              "who.skills"],
+    [/^habits?\s*\/?\s*routine$/i,               "who.routine"],
+    [/uncomfortable\s*$/i,                       "who.uncomfortable"],
+    [/(?:^|[^n])comfortable\s*$/i,               "who.comfortable"],
+  ],
+  communication: [
+    [/how\s*do\s*i\s*express/i,                  "communication.expressMyself"],
+    [/use\s*the\s*most\s*often/i,                "communication.mostOften"],
+    [/communication\s*change/i,                  "communication.changes"],
+    [/how\s*you\s*should\s*communicate/i,        "communication.howToCommunicate"],
+    [/help\s*me\s*to\s*understand/i,             "communication.whatHelps"],
+  ],
+  whenWrong: [
+    [/what\s*can\s*stress\s*me/i,                "whenWrong.stressors"],
+    [/becoming\s*stressed/i,                     "whenWrong.signs"],
+    [/help\s*me\s*to\s*calm/i,                   "whenWrong.calmMe"],
+  ],
+  medical: [
+    [/^medical\s*condition/i,                    "medical.condition"],
+    [/^epilepsy/i,                               "medical.epilepsy"],
+    [/type\s*of\s*seizure/i,                     "medical.seizureType"],
+    [/usual\s*duration/i,                        "medical.seizureDuration"],
+    [/what\s*you\s*should\s*not\s*do/i,          "medical.doNot"],
+    [/what\s*you\s*should\s*do/i,                "medical.do"],
+    [/^allergy/i,                                "medical.allergy"],
+    [/^dose$/i,                                  "__medDose"],
+    [/^frequency$/i,                             "__medFreq"],
+    [/^why/i,                                    "__medWhy"],
+    [/important\s*precautions/i,                 "__medPrec"],
+    [/^name$/i,                                  "__medName"],
+  ],
+  lastUpdate: [
+    [/who\s*made\s*the\s*update/i,               "lastUpdate.by"],
+    [/professional\s*contributed/i,              "lastUpdate.organisation"],
+    [/^last\s*update/i,                          "__updateLine"],
+    [/version\s*\/?\s*history/i,                 null],
+  ],
+};
+
+function parsePassportText(text){
+  const pp = { who:{ emergency:[] }, communication:{}, whenWrong:{}, medical:{ medication:[] }, lastUpdate:{ history:[] } };
+  let section = "who", mode = null;
+  let contact = null, med = null;
+
+  const pushContact = () => { if(contact && (contact.name || contact.phone)) pp.who.emergency.push(contact); contact = null; };
+  const pushMed = () => { if(med && Object.keys(med).length) pp.medical.medication.push(med); med = null; };
+
+  String(text).split(/\r?\n/).forEach((raw) => {
+    const line = raw.replace(/\u00a0/g, " ").trim();
+    if(!line) return;
+
+    /* a heading moves us to a new section */
+    const head = SECTION_OF.find(([re]) => re.test(line) && line.length < 40);
+    if(head){ pushContact(); pushMed(); section = head[1]; mode = null; return; }
+
+    if(/^\+?\s*add\s/i.test(line)) return;                       // "+ Add ..." placeholders
+    if(/^emergency\s*contact/i.test(line)){ pushContact(); mode = "contact"; contact = {}; return; }
+    if(/^treatment\b/i.test(line)){ pushMed(); mode = "med"; med = {}; return; }
+    if(/^medication$/i.test(line)){ pushMed(); mode = "med"; med = {}; return; }
+
+    /* history lines look like "06/09/2026 – something changed" */
+    if(section === "lastUpdate" && /^\d{1,2}\/\d{1,2}\/\d{2,4}\s*[–-]/.test(line)){
+      pp.lastUpdate.history.push(line); return;
+    }
+
+    /* one visual line can hold several fields separated by tabs */
+    line.split(/\t+|\s{3,}/).forEach((frag) => {
+      /* the document is not consistent: some labels end in ":", some in "?",
+         some in "? :". Accept all three or fields go missing silently. */
+      let m = frag.match(/^([^:?]{2,60}?)\s*\??\s*:\s*(.*)$/);
+      if(!m) m = frag.match(/^([^:?]{2,60}?)\s*\?\s+(.+)$/);
+      if(!m) return;
+      const label = m[1].replace(/\s*\?\s*$/, "").trim();
+      const value = m[2].trim();
+      if(!value) return;
+
+      const rules = FIELDS[section] || [];
+      const hit = rules.find(([re]) => re.test(label));
+      if(!hit) return;
+      const target = hit[1];
+      if(target === null) return;
+
+      if(mode === "contact" && target === "__contactName"){ contact = contact || {}; contact.name = value; return; }
+      if(mode === "contact" && target === "__contactPhone"){ contact = contact || {}; contact.phone = value; return; }
+      if(mode === "med"){
+        const map = { __medName:"name", __medDose:"dose", __medFreq:"frequency", __medWhy:"why", __medPrec:"precautions" };
+        if(map[target]){ med = med || {}; med[map[target]] = value; return; }
+      }
+      if(target === "__updateLine"){
+        const parts = value.split(/[–-]/);
+        pp.lastUpdate.date = (parts[0] || "").trim();
+        pp.lastUpdate.what = parts.slice(1).join("-").trim();
+        return;
+      }
+      if(String(target).startsWith("__")) return;
+
+      if(target === "medical.epilepsy"){ dset(pp, target, /^y|^s|^o/i.test(value)); return; }
+      dset(pp, target, value);
+    });
+  });
+  pushContact(); pushMed();
+
+  /* what the software will act on, derived from what the document says */
+  const src = pp.communication.mostOften || pp.communication.howToCommunicate || pp.communication.expressMyself;
+  pp.communication.machineFormat = window.SlimePeople ? SlimePeople.detectFormat(src) : "text";
+  if(/loud|noise|crowd/i.test(pp.whenWrong.stressors || "")) pp.whenWrong.stimulus = "low";
+  return pp;
+}
+
+async function readProfileFile(file){
+  const name = file.name.toLowerCase();
+  if(name.endsWith(".json")){
+    const txt = await file.text();
+    const data = JSON.parse(txt);
+    /* accept either a bare passport or a full people.json export */
+    if(data.people){
+      const first = Object.keys(data.people)[0];
+      return { pp: data.people[first].passport || null, suggested: first };
+    }
+    return { pp: data, suggested: (data.who && (data.who.preferredName || data.who.name)) || null };
+  }
+  if(name.endsWith(".docx")){
+    if(!window.mammoth) throw new Error("the .docx reader did not load — check the connection");
+    const buf = await file.arrayBuffer();
+    const res = await mammoth.extractRawText({ arrayBuffer: buf });
+    const pp = parsePassportText(res.value);
+    return { pp, suggested: pp.who.preferredName || pp.who.name || null };
+  }
+  const txt = await file.text();
+  const pp = parsePassportText(txt);
+  return { pp, suggested: pp.who.preferredName || pp.who.name || null };
+}
+
+function fillForm(pp){
+  $("#pp").querySelectorAll("[name]").forEach((el) => {
+    const v = dget(pp, el.name);
+    if(v == null) return;
+    el.value = typeof v === "boolean" ? (v ? "yes" : "") : v;
+  });
+  $("#contacts").innerHTML = "";
+  ((pp.who && pp.who.emergency) || []).forEach(contactRow);
+  if(!$("#contacts").children.length) contactRow();
+  $("#meds").innerHTML = "";
+  ((pp.medical && pp.medical.medication) || []).forEach(medRow);
+  if(!$("#meds").children.length) medRow();
+  const hist = dget(pp, "lastUpdate.history") || [];
+  $("#history").textContent = hist.length ? "History: " + hist.join("  ·  ") : "";
+}
+
+$("#ppFile").onchange = async (e) => {
+  const file = e.target.files && e.target.files[0];
+  const msg = $("#ppFileMsg");
+  if(!file) return;
+  msg.style.color = "#8E9C9A"; msg.textContent = "reading " + file.name + "…";
+  try{
+    const { pp, suggested } = await readProfileFile(file);
+    const who = ($("#name").value.trim() || suggested || "").trim();
+    if(!who){
+      msg.style.color = "#F2B233";
+      msg.textContent = "Could not find a name in the file. Type one in the Name box and import again.";
+      return;
+    }
+    $("#name").value = who;
+    /* filled in, not saved: a support profile should be read by a person
+       before it starts deciding how someone is spoken to */
+    openPassport(who);
+    fillForm(pp);
+    const fmt = (pp.communication && pp.communication.machineFormat) || "text";
+    msg.style.color = "#8AE6D2";
+    msg.textContent = "Imported " + who + " — format read as " + fmt + ". Check it below, then Save profile.";
+    $("#ppMsg").style.color = "#8E9C9A";
+    $("#ppMsg").textContent = "Imported from " + file.name + ". Nothing is stored until you press Save profile.";
+  }catch(err){
+    console.error("[slime] import failed", err);
+    msg.style.color = "#F2B233";
+    msg.textContent = "Could not read that file: " + (err.message || err);
+  }finally{
+    e.target.value = "";
+  }
+};
+
+
+(async function(){
+  if(window.SlimePeople) await SlimePeople.load();
+  paintList();
+  const missing = SlimePeople.missingReports(SlimeVision.people().map((p) => p.name));
+  if(missing.length){
+    const w = document.getElementById("reportWarn");
+    w.style.display = "block";
+    w.textContent = "No support report in people.json for: " + missing.join(", ")
+      + ". Slime will fall back to plain text for them, and the crisis audio will not play.";
+  }
+})();
+</script>
+</body>
+</html>
